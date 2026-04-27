@@ -1,0 +1,10 @@
+# Next.js
+.next/
+out/
+
+# Env
+.env.local
+.env.*.local
+
+# Logs
+*.log
