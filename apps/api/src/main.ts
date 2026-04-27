@@ -12,7 +12,14 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3333;
 
-app.use(cors());
+// app.use(cors());
+app.use(cors({
+  origin: [
+    'http://localhost:4200',
+    'https://invoice-generator-roan-seven.vercel.app',
+  ],
+  credentials: true,
+}));
 app.use(express.json());
 
 // Routes
