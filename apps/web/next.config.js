@@ -1,20 +1,16 @@
-// const { composePlugins, withNx } = require('@nx/next');
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  reactStrictMode: true,
+}
 
-// const nextConfig = {
-//   nx: { svgr: false },
-//   experimental: {
-//     turbo: {
-//       root: '../../',
-//     },
-//   },
-// };
-
-// const plugins = [withNx];
-// module.exports = composePlugins(...plugins)(nextConfig);
+module.exports = nextConfig
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  experimental: {
+    appDir: true,
+  }
 }
 
 module.exports = nextConfig

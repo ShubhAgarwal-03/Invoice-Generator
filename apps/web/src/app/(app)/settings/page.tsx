@@ -1,55 +1,44 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { toast } from 'sonner';
 import { companyService } from '@/services/company';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
 import { Loader2, Building2 } from 'lucide-react';
 
-const schema = z.object({
-  name: z.string().min(1, 'Company name is required'),
-  address: z.string().optional(),
-  email: z.string().email('Invalid email').optional().or(z.literal('')),
-  phone: z.string().optional(),
-  logo_url: z.string().url('Invalid URL').optional().or(z.literal('')),
-});
-
-type FormValues = z.infer<typeof schema>;
+const inputClass = "w-full border border-slate-200 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500";
 
 export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-
-  const form = useForm<FormValues>({
-    resolver: zodResolver(schema),
-    defaultValues: { name: '', address: '', email: '', phone: '', logo_url: '' },
+  const [form, setForm] = useState({
+    name: '', address: '', email: '', phone: '', logo_url: ''
   });
 
   useEffect(() => {
-    companyService.get()
-      .then(data => {
-        if (data?.name) form.reset(data);
-      })
-      .catch(() => toast.error('Failed to load company settings'))
-      .finally(() => setLoading(false));
-  }, [form]);
+  companyService.get()
+    .then(data => {
+      if (data?.name) setForm({
+        name: data.name ?? '',
+        address: data.address ?? '',
+        email: data.email ?? '',
+        phone: data.phone ?? '',
+        logo_url: data.logo_url ?? '',
+      });
+    })
+    .catch(() => toast.error('Failed to load company settings'))
+    .finally(() => setLoading(false));
+}, []);
 
-  async function onSubmit(values: FormValues) {
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.name) { toast.error('Company name is required'); return; }
     setSaving(true);
     try {
-      await companyService.save(values);
+      await companyService.save(form);
       toast.success('Company settings saved.');
     } catch {
       toast.error('Something went wrong. Please try again.');
@@ -68,99 +57,57 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-2xl">
-      <div className="mb-8">
-        <div className="flex items-center gap-3 mb-1">
-          <Building2 className="w-5 h-5 text-slate-500" />
+      <div className="mb-8 flex items-center gap-3">
+        <Building2 className="w-5 h-5 text-slate-500" />
+        <div>
           <h1 className="text-2xl font-bold text-slate-800">Company Settings</h1>
+          <p className="text-slate-500 text-sm">These details appear on all your invoices and PDFs.</p>
         </div>
-        <p className="text-slate-500 text-sm ml-8">
-          These details appear on all your invoices and PDFs.
-        </p>
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 p-6">
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Company Name <span className="text-red-500">*</span></FormLabel>
-                  <FormControl>
-                    <Input placeholder="Acme Inc." {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-700">
+              Company Name <span className="text-red-500">*</span>
+            </label>
+            <input name="name" value={form.name} onChange={handleChange}
+              placeholder="Acme Inc." className={inputClass} />
+          </div>
 
-            <FormField
-              control={form.control}
-              name="address"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Address</FormLabel>
-                  <FormControl>
-                    <Input placeholder="123 Main St, City, Country" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-700">Address</label>
+            <input name="address" value={form.address} onChange={handleChange}
+              placeholder="123 Main St, City, Country" className={inputClass} />
+          </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <FormControl>
-                      <Input placeholder="hello@acme.com" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="phone"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Phone</FormLabel>
-                    <FormControl>
-                      <Input placeholder="+1 555 000 0000" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Email</label>
+              <input name="email" value={form.email} onChange={handleChange}
+                placeholder="hello@acme.com" className={inputClass} />
             </div>
-
-            <FormField
-              control={form.control}
-              name="logo_url"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Logo URL</FormLabel>
-                  <FormControl>
-                    <Input placeholder="https://acme.com/logo.png" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className="pt-2">
-              <Button type="submit" disabled={saving}>
-                {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                Save Settings
-              </Button>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Phone</label>
+              <input name="phone" value={form.phone} onChange={handleChange}
+                placeholder="+1 555 000 0000" className={inputClass} />
             </div>
-          </form>
-        </Form>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-700">Logo URL</label>
+            <input name="logo_url" value={form.logo_url} onChange={handleChange}
+              placeholder="https://acme.com/logo.png" className={inputClass} />
+          </div>
+
+          <div className="pt-2">
+            <button type="submit" disabled={saving}
+              className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+              Save Settings
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
