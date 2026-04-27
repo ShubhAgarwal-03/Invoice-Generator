@@ -1,9 +1,0 @@
-{
-  "rewrites": [],
-  "builds": [
-    {
-      "src": "apps/web/package.json",
-      "use": "@vercel/next"
-    }
-  ]
-}
