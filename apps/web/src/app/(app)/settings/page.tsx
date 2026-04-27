@@ -15,19 +15,11 @@ export default function SettingsPage() {
   });
 
   useEffect(() => {
-  companyService.get()
-    .then(data => {
-      if (data?.name) setForm({
-        name: data.name ?? '',
-        address: data.address ?? '',
-        email: data.email ?? '',
-        phone: data.phone ?? '',
-        logo_url: data.logo_url ?? '',
-      });
-    })
-    .catch(() => toast.error('Failed to load company settings'))
-    .finally(() => setLoading(false));
-}, []);
+    companyService.get()
+      .then(data => { if (data?.name) setForm(data); })
+      .catch(() => toast.error('Failed to load company settings'))
+      .finally(() => setLoading(false));
+  }, []);
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
