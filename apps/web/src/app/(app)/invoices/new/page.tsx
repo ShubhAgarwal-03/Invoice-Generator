@@ -21,6 +21,8 @@ const emptyLine = (): LineItem => ({
   description: '', quantity: '1', unit_price: '0', tax_percent: '0'
 });
 
+const today = new Date().toISOString().split('T')[0];
+
 const COUNTRIES = [
   { code: 'IN', name: 'India' }, { code: 'US', name: 'United States' },
   { code: 'GB', name: 'United Kingdom' }, { code: 'DE', name: 'Germany' },
@@ -103,12 +105,11 @@ export default function NewInvoicePage() {
   }
 
   function fillFromItem(index: number, itemId: string) {
-    const item = items.find(i => i._id === itemId);
+      const item = items.find(i => i._id === itemId);
     if (!item) return;
-    updateLine(index, 'description', item.name);
     setLineItems(prev => prev.map((l, i) => i === index ? {
       ...l,
-      description: item.name,
+      description: item.description ?? item.name,
       unit_price: String(item.unit_price),
       tax_percent: String(item.tax_percent),
     } : l));
@@ -119,10 +120,10 @@ export default function NewInvoicePage() {
     const e: Record<string, string> = {};
     if (!customerId) e.customer = 'Please select a customer';
     if (!issueDate) e.issueDate = 'Issue date is required';
-    if (dueDate && dueDate < issueDate) e.dueDate = 'Due date must be after issue date';
+    if (dueDate && dueDate < today) e.dueDate = 'Due date must be today or a future date';
     lineItems.forEach((l, i) => {
       if (!l.description.trim()) e[`desc_${i}`] = 'Required';
-      if (!l.quantity || parseFloat(l.quantity) < 0.01) e[`qty_${i}`] = 'Min 0.01';
+      if (!l.quantity || parseFloat(l.quantity) < 1) e[`qty_${i}`] = 'Min 1';
       if (parseFloat(l.tax_percent) > 99) e[`tax_${i}`] = 'Max 99%';
     });
     setErrors(e);
@@ -252,9 +253,11 @@ export default function NewInvoicePage() {
               {errors.customer && <p className={errorClass}>{errors.customer}</p>}
               {selectedCustomer && (
                 <div className="mt-2 p-2 bg-slate-50 rounded text-xs text-slate-500 space-y-0.5">
-                  {selectedCustomer.email && <p>{selectedCustomer.email}</p>}
-                  {selectedCustomer.address && <p>{selectedCustomer.address}</p>}
-                  <p className="font-medium text-slate-600">{selectedCustomer.currency}</p>
+                {selectedCustomer.email && <p>{selectedCustomer.email}</p>}
+                {selectedCustomer.address && <p>{selectedCustomer.address}</p>}
+                <p className="font-medium text-slate-600">
+                Currency: <span className="text-blue-600">{selectedCustomer.currency}</span>
+                </p>
                 </div>
               )}
             </div>
@@ -262,20 +265,26 @@ export default function NewInvoicePage() {
             {/* Issue Date */}
             <div>
               <label className="text-sm font-medium text-slate-700">
-                Issue Date <span className="text-red-500">*</span>
+              Issue Date <span className="text-red-500">*</span>
               </label>
-              <input type="date" value={issueDate}
-                onChange={e => setIssueDate(e.target.value)}
-                className={`${inputClass} mt-1`} />
-              {errors.issueDate && <p className={errorClass}>{errors.issueDate}</p>}
+              <input 
+                type="date" 
+                value={issueDate}
+                readOnly
+                className={`${inputClass} mt-1 bg-slate-50 cursor-not-allowed text-slate-500`} 
+              />
             </div>
 
             {/* Due Date */}
             <div>
               <label className="text-sm font-medium text-slate-700">Due Date</label>
-              <input type="date" value={dueDate}
+              <input 
+                type="date" 
+                value={dueDate}
+                min={today}
                 onChange={e => setDueDate(e.target.value)}
-                className={`${inputClass} mt-1`} />
+                className={`${inputClass} mt-1`} 
+              />
               {errors.dueDate && <p className={errorClass}>{errors.dueDate}</p>}
             </div>
           </div>
@@ -294,81 +303,81 @@ export default function NewInvoicePage() {
           <div className="space-y-3">
             {/* Header row */}
             <div className="hidden md:grid grid-cols-12 gap-2 text-xs font-semibold text-slate-500 uppercase tracking-wide px-1">
-              <div className="col-span-4">Description</div>
-              <div className="col-span-2">From Catalogue</div>
-              <div className="col-span-1">Qty</div>
-              <div className="col-span-2">Unit Price</div>
-              <div className="col-span-1">Tax %</div>
-              <div className="col-span-1 text-right">Total</div>
-              <div className="col-span-1"></div>
-            </div>
+            <div className="col-span-2">From Catalogue</div>
+            <div className="col-span-4">Description</div>
+            <div className="col-span-1">Qty</div>
+            <div className="col-span-2">Unit Price</div>
+            <div className="col-span-1">Tax %</div>
+            <div className="col-span-1 text-right">Total</div>
+            <div className="col-span-1"></div>
+          </div>
 
-            {lineItems.map((line, i) => {
+          {lineItems.map((line, i) => {
               const { total } = calcLine(line);
-              return (
-                <div key={i} className="grid grid-cols-12 gap-2 items-start">
-                  {/* Description */}
-                  <div className="col-span-12 md:col-span-4">
-                    <input value={line.description}
-                      onChange={e => updateLine(i, 'description', e.target.value)}
-                      placeholder="Description"
-                      className={inputClass} />
-                    {errors[`desc_${i}`] && <p className={errorClass}>{errors[`desc_${i}`]}</p>}
-                  </div>
+            return (
+            <div key={i} className="grid grid-cols-12 gap-2 items-start">
+            {/* From catalogue — FIRST */}
+            <div className="col-span-12 md:col-span-2">
+            <select onChange={e => fillFromItem(i, e.target.value)}
+            defaultValue=""
+            className={inputClass}>
+            <option value="">Pick item...</option>
+            {items.map(item => (
+            <option key={item._id} value={item._id}>{item.name}</option>
+            ))}
+        </select>
+      </div>
 
-                  {/* From catalogue */}
-                  <div className="col-span-12 md:col-span-2">
-                    <select onChange={e => fillFromItem(i, e.target.value)}
-                      defaultValue=""
-                      className={inputClass}>
-                      <option value="">Pick item...</option>
-                      {items.map(item => (
-                        <option key={item._id} value={item._id}>{item.name}</option>
-                      ))}
-                    </select>
-                  </div>
+      {/* Description — SECOND */}
+      <div className="col-span-12 md:col-span-4">
+        <input value={line.description}
+          onChange={e => updateLine(i, 'description', e.target.value)}
+          placeholder="Description"
+          className={inputClass} />
+        {errors[`desc_${i}`] && <p className={errorClass}>{errors[`desc_${i}`]}</p>}
+      </div>
 
-                  {/* Qty */}
-                  <div className="col-span-4 md:col-span-1">
-                    <input type="number" value={line.quantity} min="0.01" step="0.01"
-                      onChange={e => updateLine(i, 'quantity', e.target.value)}
-                      placeholder="1" className={inputClass} />
-                    {errors[`qty_${i}`] && <p className={errorClass}>{errors[`qty_${i}`]}</p>}
-                  </div>
+      {/* Qty — whole numbers */}
+      <div className="col-span-4 md:col-span-1">
+        <input type="number" value={line.quantity} min="1" step="1"
+          onChange={e => updateLine(i, 'quantity', e.target.value)}
+          placeholder="1" className={inputClass} />
+        {errors[`qty_${i}`] && <p className={errorClass}>{errors[`qty_${i}`]}</p>}
+      </div>
 
-                  {/* Unit Price */}
-                  <div className="col-span-4 md:col-span-2">
-                    <input type="number" value={line.unit_price} min="0" step="0.01"
-                      onChange={e => updateLine(i, 'unit_price', e.target.value)}
-                      placeholder="0.00" className={inputClass} />
-                  </div>
+      {/* Unit Price */}
+      <div className="col-span-4 md:col-span-2">
+        <input type="number" value={line.unit_price} min="0" step="0.01"
+          onChange={e => updateLine(i, 'unit_price', e.target.value)}
+          placeholder="0.00" className={inputClass} />
+      </div>
 
-                  {/* Tax % */}
-                  <div className="col-span-3 md:col-span-1">
-                    <input type="number" value={line.tax_percent} min="0" max="99" step="0.01"
-                      onChange={e => updateLine(i, 'tax_percent', e.target.value)}
-                      placeholder="0" className={inputClass} />
-                    {errors[`tax_${i}`] && <p className={errorClass}>{errors[`tax_${i}`]}</p>}
-                  </div>
+      {/* Tax % */}
+      <div className="col-span-3 md:col-span-1">
+        <input type="number" value={line.tax_percent} min="0" max="99" step="0.01"
+          onChange={e => updateLine(i, 'tax_percent', e.target.value)}
+          placeholder="0" className={inputClass} />
+        {errors[`tax_${i}`] && <p className={errorClass}>{errors[`tax_${i}`]}</p>}
+      </div>
 
-                  {/* Line Total */}
-                  <div className="col-span-1 md:col-span-1 flex items-center justify-end">
-                    <span className="text-sm font-medium text-slate-700 whitespace-nowrap">
-                      {fmt(total)}
-                    </span>
-                  </div>
+      {/* Line Total */}
+      <div className="col-span-1 md:col-span-1 flex items-center justify-end">
+        <span className="text-sm font-medium text-slate-700 whitespace-nowrap">
+          {fmt(subtotal)}
+        </span>
+      </div>
 
-                  {/* Remove */}
-                  <div className="col-span-1 flex items-center justify-center">
-                    <button type="button" onClick={() => removeLine(i)}
-                      disabled={lineItems.length === 1}
-                      className="p-1.5 text-slate-400 hover:text-red-500 disabled:opacity-30 disabled:cursor-not-allowed">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+      {/* Remove */}
+      <div className="col-span-1 flex items-center justify-center">
+        <button type="button" onClick={() => removeLine(i)}
+          disabled={lineItems.length === 1}
+          className="p-1.5 text-slate-400 hover:text-red-500 disabled:opacity-30 disabled:cursor-not-allowed">
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+})}
           </div>
 
           <button type="button" onClick={addLine}

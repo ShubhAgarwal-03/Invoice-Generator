@@ -12,12 +12,16 @@ export interface Customer {
   createdAt: string;
 }
 
+
 export interface Item {
   _id: string;
   name: string;
   description?: string;
   unit_price: number;
   tax_percent: number;
+  unit_of_measure?: string;
+  item_type?: 'simple' | 'compound';
+  currency?: string;
 }
 
 export interface LineItem {

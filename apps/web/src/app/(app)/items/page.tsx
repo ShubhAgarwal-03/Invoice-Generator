@@ -6,7 +6,25 @@ import { itemsService } from '@/services/items';
 import { Item } from '@/types';
 import { Loader2, Package, Plus, Pencil, Trash2 } from 'lucide-react';
 
-const emptyForm = { name: '', description: '', unit_price: '', tax_percent: '0' };
+const CURRENCIES = [
+  'USD', 'INR', 'GBP', 'EUR', 'AUD', 'CAD', 'JPY',
+  'SGD', 'AED', 'BRL', 'ZAR', 'NGN', 'KES', 'NZD',
+];
+
+const UOM_OPTIONS = [
+  'piece', 'hour', 'day', 'month', 'kg', 'g', 'litre',
+  'metre', 'sqft', 'sqm', 'unit', 'set', 'box', 'lot',
+];
+
+const emptyForm = {
+  name: '',
+  description: '',
+  unit_price: '',
+  tax_percent: '0',
+  unit_of_measure: '',
+  item_type: 'simple' as 'simple' | 'compound',
+  currency: 'USD',
+};
 
 export default function ItemsPage() {
   const [items, setItems] = useState<Item[]>([]);
@@ -44,6 +62,9 @@ export default function ItemsPage() {
       description: item.description ?? '',
       unit_price: String(item.unit_price),
       tax_percent: String(item.tax_percent),
+      unit_of_measure: item.unit_of_measure ?? '',
+      item_type: item.item_type ?? 'simple',
+      currency: item.currency ?? 'USD',
     });
     setEditingId(item._id);
     setErrors({});
@@ -72,6 +93,9 @@ export default function ItemsPage() {
         description: form.description,
         unit_price: Number(form.unit_price),
         tax_percent: Number(form.tax_percent),
+        unit_of_measure: form.unit_of_measure,
+        item_type: form.item_type,
+        currency: form.currency,
       };
       if (editingId) {
         const updated = await itemsService.update(editingId, payload);
@@ -100,7 +124,7 @@ export default function ItemsPage() {
     }
   }
 
-  function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
+  function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
     if (errors[e.target.name]) setErrors(prev => ({ ...prev, [e.target.name]: '' }));
   }
@@ -110,7 +134,6 @@ export default function ItemsPage() {
 
   return (
     <div>
-      {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
           <Package className="w-5 h-5 text-slate-500" />
@@ -125,7 +148,6 @@ export default function ItemsPage() {
         </button>
       </div>
 
-      {/* Table */}
       {loading ? (
         <div className="flex justify-center py-20">
           <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
@@ -145,7 +167,7 @@ export default function ItemsPage() {
           <table className="w-full text-sm">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                {['Name', 'Description', 'Unit Price', 'Tax %', 'Actions'].map(h => (
+                {['Name', 'Description', 'Type', 'UOM', 'Currency', 'Unit Price', 'Tax %', 'Actions'].map(h => (
                   <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
                     {h}
                   </th>
@@ -157,6 +179,16 @@ export default function ItemsPage() {
                 <tr key={item._id} className="hover:bg-slate-50 transition-colors">
                   <td className="px-4 py-3 font-medium text-slate-800">{item.name}</td>
                   <td className="px-4 py-3 text-slate-500">{item.description || '—'}</td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
+                      ${item.item_type === 'compound'
+                        ? 'bg-purple-100 text-purple-700'
+                        : 'bg-slate-100 text-slate-600'}`}>
+                      {item.item_type ?? 'simple'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-slate-500">{item.unit_of_measure || '—'}</td>
+                  <td className="px-4 py-3 text-slate-500 font-medium">{item.currency || '—'}</td>
                   <td className="px-4 py-3 text-slate-700 font-mono">{item.unit_price.toFixed(2)}</td>
                   <td className="px-4 py-3 text-slate-500">{item.tax_percent}%</td>
                   <td className="px-4 py-3">
@@ -181,7 +213,7 @@ export default function ItemsPage() {
       {/* Create/Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg">
             <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
               <h2 className="font-semibold text-slate-800">
                 {editingId ? 'Edit Item' : 'New Item'}
@@ -190,6 +222,8 @@ export default function ItemsPage() {
                 className="text-slate-400 hover:text-slate-600 text-xl">✕</button>
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
+
+              {/* Name */}
               <div>
                 <label className="text-sm font-medium text-slate-700">
                   Name <span className="text-red-500">*</span>
@@ -199,12 +233,56 @@ export default function ItemsPage() {
                 {errors.name && <p className={errorClass}>{errors.name}</p>}
               </div>
 
+              {/* Description */}
               <div>
                 <label className="text-sm font-medium text-slate-700">Description</label>
                 <input name="description" value={form.description} onChange={handleChange}
                   placeholder="Brief description of the item" className={`${inputClass} mt-1`} />
               </div>
 
+              {/* Item Type toggle */}
+              <div>
+                <label className="text-sm font-medium text-slate-700">Item Type</label>
+                <div className="flex gap-2 mt-1">
+                  {(['simple', 'compound'] as const).map(type => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => setForm(p => ({ ...p, item_type: type }))}
+                      className={`flex-1 py-2 rounded-md text-sm font-medium border transition-colors capitalize
+                        ${form.item_type === type
+                          ? 'bg-blue-600 text-white border-blue-600'
+                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>
+                      {type}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* UOM + Currency */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-sm font-medium text-slate-700">Unit of Measure</label>
+                  <select name="unit_of_measure" value={form.unit_of_measure}
+                    onChange={handleChange} className={`${inputClass} mt-1`}>
+                    <option value="">Select UOM...</option>
+                    {UOM_OPTIONS.map(u => (
+                      <option key={u} value={u}>{u}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-slate-700">Currency</label>
+                  <select name="currency" value={form.currency}
+                    onChange={handleChange} className={`${inputClass} mt-1`}>
+                    {CURRENCIES.map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Unit Price + Tax */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-sm font-medium text-slate-700">
@@ -245,9 +323,7 @@ export default function ItemsPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
             <h2 className="font-semibold text-slate-800 mb-2">Delete Item?</h2>
-            <p className="text-slate-500 text-sm mb-6">
-              This action cannot be undone.
-            </p>
+            <p className="text-slate-500 text-sm mb-6">This action cannot be undone.</p>
             <div className="flex justify-end gap-3">
               <button onClick={() => setDeleteId(null)}
                 className="px-4 py-2 text-sm rounded-md border border-slate-200 hover:bg-slate-50">
