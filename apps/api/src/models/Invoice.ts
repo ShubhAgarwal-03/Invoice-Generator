@@ -1,13 +1,16 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
+
 export interface ILineItem {
   description: string;
   quantity: number;
   unit_price: number;
   tax_percent: number;
   line_total: number;
+  hsn_sac?: string;
 }
 
+// Add to CustomerSnapshot
 export interface ICustomerSnapshot {
   _id: string;
   name: string;
@@ -16,7 +19,10 @@ export interface ICustomerSnapshot {
   gstin?: string;
   country: string;
   currency: string;
+  phone?: string;
+  ship_to?: string;
 }
+
 
 export type InvoiceStatus = 'draft' | 'sent' | 'paid';
 
@@ -38,13 +44,16 @@ export interface IInvoice extends Document {
   updatedAt: Date;
 }
 
+
 const LineItemSchema = new Schema<ILineItem>({
   description: { type: String, required: true },
-  quantity: { type: Number, required: true, min: 0.01 },
+  quantity: { type: Number, required: true, min: 1 },
   unit_price: { type: Number, required: true, min: 0 },
   tax_percent: { type: Number, required: true, min: 0, max: 99 },
   line_total: { type: Number, required: true },
+  hsn_sac: { type: String },
 }, { _id: false });
+
 
 const CustomerSnapshotSchema = new Schema<ICustomerSnapshot>({
   _id: { type: String, required: true },

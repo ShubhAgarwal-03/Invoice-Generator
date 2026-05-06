@@ -11,12 +11,13 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
-    name: '', address: '', email: '', phone: '', logo_url: ''
+    name: '', address: '', email: '', phone: '', logo_url: '',
+    gstin: '', pan: '', bank_name: '', account_number: '', ifsc_code: '', branch: ''
   });
 
   useEffect(() => {
     companyService.get()
-      .then(data => { if (data?.name) setForm(data); })
+      .then(data => { if (data?.name) setForm(f => ({ ...f, ...data })); })
       .catch(() => toast.error('Failed to load company settings'))
       .finally(() => setLoading(false));
   }, []);
@@ -39,13 +40,11 @@ export default function SettingsPage() {
     }
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
-      </div>
-    );
-  }
+  if (loading) return (
+    <div className="flex items-center justify-center h-64">
+      <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+    </div>
+  );
 
   return (
     <div className="max-w-2xl">
@@ -53,54 +52,87 @@ export default function SettingsPage() {
         <Building2 className="w-5 h-5 text-slate-500" />
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Company Settings</h1>
-          <p className="text-slate-500 text-sm">These details appear on all your invoices and PDFs.</p>
+          <p className="text-slate-500 text-sm">These details appear on all invoices and PDFs.</p>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-200 p-6">
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-700">
-              Company Name <span className="text-red-500">*</span>
-            </label>
-            <input name="name" value={form.name} onChange={handleChange}
-              placeholder="Acme Inc." className={inputClass} />
-          </div>
+      <form onSubmit={handleSubmit} className="space-y-6">
 
-          <div className="space-y-2">
+        {/* Basic Info */}
+        <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-4">
+          <h2 className="font-semibold text-slate-700">Basic Information</h2>
+          <div>
+            <label className="text-sm font-medium text-slate-700">Company Name <span className="text-red-500">*</span></label>
+            <input name="name" value={form.name} onChange={handleChange} placeholder="Acme Inc." className={`${inputClass} mt-1`} />
+          </div>
+          <div>
             <label className="text-sm font-medium text-slate-700">Address</label>
-            <input name="address" value={form.address} onChange={handleChange}
-              placeholder="123 Main St, City, Country" className={inputClass} />
+            <input name="address" value={form.address} onChange={handleChange} placeholder="123 Main St, City, State, PIN" className={`${inputClass} mt-1`} />
           </div>
-
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
+            <div>
               <label className="text-sm font-medium text-slate-700">Email</label>
-              <input name="email" value={form.email} onChange={handleChange}
-                placeholder="hello@acme.com" className={inputClass} />
+              <input name="email" value={form.email} onChange={handleChange} placeholder="hello@acme.com" className={`${inputClass} mt-1`} />
             </div>
-            <div className="space-y-2">
+            <div>
               <label className="text-sm font-medium text-slate-700">Phone</label>
-              <input name="phone" value={form.phone} onChange={handleChange}
-                placeholder="+1 555 000 0000" className={inputClass} />
+              <input name="phone" value={form.phone} onChange={handleChange} placeholder="+91 98765 43210" className={`${inputClass} mt-1`} />
             </div>
           </div>
-
-          <div className="space-y-2">
+          <div>
             <label className="text-sm font-medium text-slate-700">Logo URL</label>
-            <input name="logo_url" value={form.logo_url} onChange={handleChange}
-              placeholder="https://acme.com/logo.png" className={inputClass} />
+            <input name="logo_url" value={form.logo_url} onChange={handleChange} placeholder="https://acme.com/logo.png" className={`${inputClass} mt-1`} />
           </div>
+        </div>
 
-          <div className="pt-2">
-            <button type="submit" disabled={saving}
-              className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
-              {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-              Save Settings
-            </button>
+        {/* Tax Info */}
+        <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-4">
+          <h2 className="font-semibold text-slate-700">Tax Information</h2>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-sm font-medium text-slate-700">GSTIN</label>
+              <input name="gstin" value={form.gstin} onChange={handleChange} placeholder="22AAAAA0000A1Z5" className={`${inputClass} mt-1`} />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-slate-700">PAN</label>
+              <input name="pan" value={form.pan} onChange={handleChange} placeholder="AAAAA0000A" className={`${inputClass} mt-1`} />
+            </div>
           </div>
-        </form>
-      </div>
+        </div>
+
+        {/* Bank Details */}
+        <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-4">
+          <h2 className="font-semibold text-slate-700">Bank Details</h2>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-sm font-medium text-slate-700">Bank Name</label>
+              <input name="bank_name" value={form.bank_name} onChange={handleChange} placeholder="State Bank of India" className={`${inputClass} mt-1`} />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-slate-700">Account Number</label>
+              <input name="account_number" value={form.account_number} onChange={handleChange} placeholder="1234567890" className={`${inputClass} mt-1`} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-sm font-medium text-slate-700">IFSC Code</label>
+              <input name="ifsc_code" value={form.ifsc_code} onChange={handleChange} placeholder="SBIN0001234" className={`${inputClass} mt-1`} />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-slate-700">Branch</label>
+              <input name="branch" value={form.branch} onChange={handleChange} placeholder="MG Road, Bengaluru" className={`${inputClass} mt-1`} />
+            </div>
+          </div>
+        </div>
+
+        <div className="flex justify-end">
+          <button type="submit" disabled={saving}
+            className="flex items-center gap-2 bg-blue-600 text-white px-6 py-2 rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 cursor-pointer">
+            {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+            Save Settings
+          </button>
+        </div>
+      </form>
     </div>
   );
-} 
+}

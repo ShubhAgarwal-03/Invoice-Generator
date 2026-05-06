@@ -22,6 +22,7 @@ export interface Item {
   unit_of_measure?: string;
   item_type?: 'simple' | 'compound';
   currency?: string;
+  hsn_sac?: string;
 }
 
 export interface LineItem {
@@ -64,6 +65,12 @@ export interface CompanyConfig {
   email?: string;
   phone?: string;
   logo_url?: string;
+  gstin?: string;
+  pan?: string;
+  bank_name?: string;
+  account_number?: string;
+  ifsc_code?: string;
+  branch?: string;
 }
 
 export interface PaginationMeta {

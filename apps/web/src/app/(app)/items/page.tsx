@@ -24,7 +24,9 @@ const emptyForm = {
   unit_of_measure: '',
   item_type: 'simple' as 'simple' | 'compound',
   currency: 'USD',
+  hsn_sac: ''
 };
+
 
 export default function ItemsPage() {
   const [items, setItems] = useState<Item[]>([]);
@@ -65,6 +67,7 @@ export default function ItemsPage() {
       unit_of_measure: item.unit_of_measure ?? '',
       item_type: item.item_type ?? 'simple',
       currency: item.currency ?? 'USD',
+      hsn_sac: item.hsn_sac ?? '',
     });
     setEditingId(item._id);
     setErrors({});
@@ -96,6 +99,7 @@ export default function ItemsPage() {
         unit_of_measure: form.unit_of_measure,
         item_type: form.item_type,
         currency: form.currency,
+        hsn_sac: form.hsn_sac,
       };
       if (editingId) {
         const updated = await itemsService.update(editingId, payload);
@@ -167,7 +171,7 @@ export default function ItemsPage() {
           <table className="w-full text-sm">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                {['Name', 'Description', 'Type', 'UOM', 'Currency', 'Unit Price', 'Tax %', 'Actions'].map(h => (
+                {['Name', 'Description', 'HSN/SAC', 'Type', 'UOM', 'Currency', 'Unit Price', 'Tax %', 'Actions'].map(h => (
                   <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
                     {h}
                   </th>
@@ -179,6 +183,9 @@ export default function ItemsPage() {
                 <tr key={item._id} className="hover:bg-slate-50 transition-colors">
                   <td className="px-4 py-3 font-medium text-slate-800">{item.name}</td>
                   <td className="px-4 py-3 text-slate-500">{item.description || '—'}</td>
+                  <td className="px-4 py-3 text-slate-500 font-mono">
+                      {item.hsn_sac || '—'}
+                  </td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
                       ${item.item_type === 'compound'
@@ -231,6 +238,19 @@ export default function ItemsPage() {
                 <input name="name" value={form.name} onChange={handleChange}
                   placeholder="Web Design Services" className={`${inputClass} mt-1`} />
                 {errors.name && <p className={errorClass}>{errors.name}</p>}
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-slate-700">
+                  HSN/SAC Code
+                </label>
+                <input
+                  name="hsn_sac"
+                  value={form.hsn_sac}
+                  onChange={handleChange}
+                  placeholder="998314"
+                  className={`${inputClass} mt-1`}
+                />
               </div>
 
               {/* Description */}

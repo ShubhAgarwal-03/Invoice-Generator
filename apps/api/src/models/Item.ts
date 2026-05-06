@@ -12,7 +12,9 @@ export interface IItem extends Document {
   is_deleted: boolean;
   createdAt: Date;
   updatedAt: Date;
+  hsn_sac: { type: String, trim: true };
 }
+
 
 const ItemSchema = new Schema<IItem>(
   {
@@ -24,6 +26,7 @@ const ItemSchema = new Schema<IItem>(
     item_type: { type: String, enum: ['simple', 'compound'], default: 'simple' },
     currency: { type: String, trim: true },
     is_deleted: { type: Boolean, default: false },
+    hsn_sac: { type: String, trim: true }, 
   },
   { timestamps: true }
 );
