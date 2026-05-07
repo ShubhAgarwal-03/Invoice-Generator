@@ -15,10 +15,11 @@ interface LineItem {
   quantity: string;
   unit_price: string;
   tax_percent: string;
+   hsn_sac: string; 
 }
 
 const emptyLine = (): LineItem => ({
-  description: '', quantity: '1', unit_price: '0', tax_percent: '0'
+  description: '', quantity: '1', unit_price: '0', tax_percent: '0',hsn_sac: '',
 });
 
 const today = new Date().toISOString().split('T')[0];
@@ -46,6 +47,9 @@ export default function NewInvoicePage() {
   const [lineItems, setLineItems] = useState<LineItem[]>([emptyLine()]);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const [differentShipping, setDifferentShipping] = useState(false);
+  const [shippingAddress, setShippingAddress] = useState('');
 
   // Inline customer modal
   const [showCustomerModal, setShowCustomerModal] = useState(false);
@@ -140,12 +144,14 @@ export default function NewInvoicePage() {
         customer_id: customerId,
         issue_date: issueDate,
         due_date: dueDate || undefined,
+        shipping_address: differentShipping && shippingAddress.trim() ? shippingAddress.trim() : null,
         notes,
         items: lineItems.map(l => ({
           description: l.description,
           quantity: parseFloat(l.quantity),
           unit_price: parseFloat(l.unit_price),
           tax_percent: parseFloat(l.tax_percent),
+          hsn_sac: l.hsn_sac.trim() || undefined,
         })),
       };
       const inv = await invoicesService.create(payload as never);
@@ -371,7 +377,7 @@ export default function NewInvoicePage() {
       <div className="col-span-1 flex items-center justify-center">
         <button type="button" onClick={() => removeLine(i)}
           disabled={lineItems.length === 1}
-          className="p-1.5 text-slate-400 hover:text-red-500 disabled:opacity-30 disabled:cursor-not-allowed">
+          className="p-1.5 text-slate-400 hover:text-red-500 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
           <Trash2 className="w-4 h-4" />
         </button>
       </div>
@@ -381,7 +387,7 @@ export default function NewInvoicePage() {
           </div>
 
           <button type="button" onClick={addLine}
-            className="mt-4 flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 font-medium">
+            className="mt-4 flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 font-medium cursor-pointer">
             <Plus className="w-4 h-4" /> Add Line
           </button>
 
@@ -416,11 +422,11 @@ export default function NewInvoicePage() {
         {/* Actions */}
         <div className="flex justify-end gap-3">
           <button type="button" onClick={() => router.push('/invoices')}
-            className="px-4 py-2 text-sm rounded-md border border-slate-200 hover:bg-slate-50">
+            className="px-4 py-2 text-sm rounded-md border border-slate-200 hover:bg-slate-50 cursor-pointer">
             Cancel
           </button>
           <button type="submit" disabled={saving}
-            className="flex items-center gap-2 bg-blue-600 text-white px-6 py-2 rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+            className="flex items-center gap-2 bg-blue-600 text-white px-6 py-2 rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 cursor-pointer">
             {saving && <Loader2 className="w-4 h-4 animate-spin" />}
             Create Invoice
           </button>
@@ -465,11 +471,41 @@ export default function NewInvoicePage() {
                   {COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
                 </select>
               </div>
+              {/* Shipping Address */}
+<div className="bg-white rounded-xl border border-slate-200 p-6">
+  <div className="flex items-center justify-between mb-3">
+    <h2 className="font-semibold text-slate-700">Shipping Address</h2>
+    <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
+      <input
+        type="checkbox"
+        checked={differentShipping}
+        onChange={e => {
+          setDifferentShipping(e.target.checked);
+          if (!e.target.checked) setShippingAddress('');
+        }}
+        className="rounded border-slate-300 cursor-pointer"
+      />
+      Different from billing address
+    </label>
+  </div>
+  {differentShipping ? (
+    <input
+      value={shippingAddress}
+      onChange={e => setShippingAddress(e.target.value)}
+      placeholder="Enter shipping address..."
+      className="w-full border border-slate-200 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+    />
+  ) : (
+    <p className="text-sm text-slate-400 italic">
+      {selectedCustomer?.address || 'Same as billing address'}
+    </p>
+  )}
+</div>
               <div className="flex justify-end gap-3 pt-2">
                 <button type="button" onClick={() => setShowCustomerModal(false)}
-                  className="px-4 py-2 text-sm rounded-md border border-slate-200 hover:bg-slate-50">Cancel</button>
+                  className="px-4 py-2 text-sm rounded-md border border-slate-200 hover:bg-slate-50 cursor-pointer">Cancel</button>
                 <button type="submit" disabled={savingCustomer}
-                  className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+                  className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 cursor-pointer">
                   {savingCustomer && <Loader2 className="w-4 h-4 animate-spin" />}
                   Create
                 </button>
@@ -517,9 +553,9 @@ export default function NewInvoicePage() {
               </div>
               <div className="flex justify-end gap-3 pt-2">
                 <button type="button" onClick={() => setShowItemModal(false)}
-                  className="px-4 py-2 text-sm rounded-md border border-slate-200 hover:bg-slate-50">Cancel</button>
+                  className="px-4 py-2 text-sm rounded-md border border-slate-200 hover:bg-slate-50 cursor-pointer">Cancel</button>
                 <button type="submit" disabled={savingItem}
-                  className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+                  className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 cursor-pointer">
                   {savingItem && <Loader2 className="w-4 h-4 animate-spin" />}
                   Create
                 </button>

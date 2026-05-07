@@ -15,6 +15,7 @@ interface LineItem {
   quantity: string;
   unit_price: string;
   tax_percent: string;
+  hsn_sac: string;
 }
 
 const today = new Date().toISOString().split('T')[0];
@@ -23,7 +24,8 @@ const emptyLine = (): LineItem => ({
   description: '', 
   quantity: '1', 
   unit_price: '0', 
-  tax_percent: '0'
+  tax_percent: '0',
+   hsn_sac: '',
 });
 
 const COUNTRIES = [
@@ -69,6 +71,9 @@ export default function EditInvoicePage() {
   });
   const [savingItem, setSavingItem] = useState(false);
 
+  const [differentShipping, setDifferentShipping] = useState(false);
+  const [shippingAddress, setShippingAddress] = useState('');
+
   useEffect(() => {
     let isMounted = true;
     
@@ -92,11 +97,16 @@ export default function EditInvoicePage() {
         setDueDate(inv.due_date ? inv.due_date.split('T')[0] : '');
         setStatus(inv.status);
         setNotes(inv.notes ?? '');
+        if (inv.shipping_address) {
+          setDifferentShipping(true);
+          setShippingAddress(inv.shipping_address);
+        }
         setLineItems(inv.items.map(l => ({
           description: l.description,
           quantity: String(l.quantity),
           unit_price: String(l.unit_price),
           tax_percent: String(l.tax_percent),
+          hsn_sac: l.hsn_sac ?? '',
         })));
 
         const found = allCustomers.find(cu => cu._id === inv.customer_id);
@@ -176,6 +186,7 @@ export default function EditInvoicePage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    
     if (!validate()) {
       toast.error('Please fix validation errors');
       return;
@@ -188,12 +199,14 @@ export default function EditInvoicePage() {
         issue_date: new Date(issueDate).toISOString(),
         due_date: dueDate ? new Date(dueDate).toISOString() : undefined,
         status,
+        shipping_address: differentShipping && shippingAddress.trim() ? shippingAddress.trim() : null,
         notes: notes.trim(),
         items: lineItems.map(l => ({
           description: l.description.trim(),
           quantity: Number(l.quantity),
           unit_price: Number(l.unit_price),
           tax_percent: Number(l.tax_percent),
+          hsn_sac: l.hsn_sac.trim() || undefined,
         })),
       };
 
@@ -272,12 +285,12 @@ export default function EditInvoicePage() {
           <button 
             type="button"
             onClick={() => router.push(`/invoices/${id}`)}
-            className="p-2 hover:bg-slate-100 rounded-full transition-colors"
+            className="p-2 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
           >
             <ArrowLeft className="w-5 h-5 text-slate-500" />
           </button>
           <div>
-            <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2 cursor-pointer">
               <FileText className="w-6 h-6 text-blue-600" />
               Edit {invoice.invoice_number}
             </h1>
@@ -304,7 +317,7 @@ export default function EditInvoicePage() {
                 <button 
                   type="button" 
                   onClick={() => setShowCustomerModal(true)}
-                  className="shrink-0 p-2 border border-slate-200 rounded-md hover:bg-slate-50 text-blue-600"
+                  className="shrink-0 p-2 border border-slate-200 rounded-md hover:bg-slate-50 text-blue-600 cursor-pointer"
                 >
                   <Plus className="w-5 h-5" />
                 </button>
@@ -357,6 +370,38 @@ export default function EditInvoicePage() {
           </div>
         </div>
 
+
+        {/* Shipping Address */}
+        <div className="bg-white rounded-xl border border-slate-200 p-6">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-semibold text-slate-700">Shipping Address</h2>
+          <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={differentShipping}
+              onChange={e => {
+                setDifferentShipping(e.target.checked);
+                if (!e.target.checked) setShippingAddress('');
+              }}
+            className="rounded border-slate-300 cursor-pointer"
+            />
+          Different from billing address
+          </label>
+        </div>
+        {differentShipping ? (
+        <input
+          value={shippingAddress}
+          onChange={e => setShippingAddress(e.target.value)}
+          placeholder="Enter shipping address..."
+          className="w-full border border-slate-200 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        ) : (
+        <p className="text-sm text-slate-400 italic">
+          {selectedCustomer?.address || 'Same as billing address'}
+        </p>
+        )}
+        </div>
+
         {/* Line Items Section */}
         <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
           <div className="flex items-center justify-between mb-6">
@@ -364,7 +409,7 @@ export default function EditInvoicePage() {
             <button 
               type="button" 
               onClick={() => setShowItemModal(true)}
-              className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 rounded-lg transition-colors"
+              className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 rounded-lg transition-colors cursor-pointer"
             >
               <Plus className="w-4 h-4" /> Add New to Catalogue
             </button>
@@ -378,9 +423,11 @@ export default function EditInvoicePage() {
               <div className="col-span-1">Qty</div>
               <div className="col-span-2">Price</div>
               <div className="col-span-1">Tax %</div>
+              <div className="w-28 text-xs font-semibold text-slate-500">HSN/SAC</div>
               <div className="col-span-1 text-right">Total</div>
               <div className="col-span-1"></div>
             </div>
+            
 
             {lineItems.map((line, i) => {
               const { total } = calcLine(line);
@@ -406,6 +453,16 @@ export default function EditInvoicePage() {
                     />
                     {errors[`desc_${i}`] && <p className={errorClass}>{errors[`desc_${i}`]}</p>}
                   </div>
+
+                  {/* HSN/SAC */}
+                <div className="w-28">
+                  <input
+                    value={line.hsn_sac}
+                    onChange={e => updateLine(i, 'hsn_sac', e.target.value)}
+                    placeholder="HSN/SAC"
+                    className="w-full border border-slate-200 rounded-md px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
 
                   <div className="col-span-4 md:col-span-1">
                     <input 
@@ -445,7 +502,7 @@ export default function EditInvoicePage() {
                       type="button" 
                       onClick={() => removeLine(i)}
                       disabled={lineItems.length === 1}
-                      className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg disabled:opacity-0 transition-all"
+                      className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg disabled:opacity-0 transition-all cursor-pointer"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -458,7 +515,7 @@ export default function EditInvoicePage() {
           <button 
             type="button" 
             onClick={addLine}
-            className="mt-6 flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 font-bold"
+            className="mt-6 flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 font-bold cursor-pointer"
           >
             <Plus className="w-4 h-4" /> Add Another Line
           </button>
@@ -499,14 +556,14 @@ export default function EditInvoicePage() {
           <button 
             type="button" 
             onClick={() => router.push(`/invoices/${id}`)}
-            className="px-6 py-2.5 text-sm font-semibold text-slate-600 hover:text-slate-800 transition-colors"
+            className="px-6 py-2.5 text-sm font-semibold text-slate-600 hover:text-slate-800 transition-colors cursor-pointer"
           >
             Cancel
           </button>
           <button 
             type="submit" 
             disabled={saving}
-            className="bg-blue-600 text-white px-8 py-2.5 rounded-lg text-sm font-bold hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-blue-200 transition-all active:scale-95"
+            className="bg-blue-600 text-white px-8 py-2.5 rounded-lg text-sm font-bold hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-blue-200 transition-all active:scale-95 cursor-pointer"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
             Save Changes
@@ -520,7 +577,7 @@ export default function EditInvoicePage() {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
               <h2 className="font-bold text-slate-800">New Customer</h2>
-              <button onClick={() => setShowCustomerModal(false)} className="text-slate-400 hover:text-slate-600">
+              <button onClick={() => setShowCustomerModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -558,14 +615,14 @@ export default function EditInvoicePage() {
                 <button 
                   type="button" 
                   onClick={() => setShowCustomerModal(false)}
-                  className="flex-1 px-4 py-2 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-lg"
+                  className="flex-1 px-4 py-2 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-lg cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button 
                   type="submit" 
                   disabled={savingCustomer}
-                  className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 disabled:opacity-50"
+                  className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 disabled:opacity-50 cursor-pointer"
                 >
                   {savingCustomer ? 'Creating...' : 'Create Customer'}
                 </button>
@@ -581,7 +638,7 @@ export default function EditInvoicePage() {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
               <h2 className="font-bold text-slate-800">Add to Catalogue</h2>
-              <button onClick={() => setShowItemModal(false)} className="text-slate-400 hover:text-slate-600">
+              <button onClick={() => setShowItemModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -619,14 +676,14 @@ export default function EditInvoicePage() {
                 <button 
                   type="button" 
                   onClick={() => setShowItemModal(false)}
-                  className="flex-1 px-4 py-2 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-lg"
+                  className="flex-1 px-4 py-2 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-lg cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button 
                   type="submit" 
                   disabled={savingItem}
-                  className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 disabled:opacity-50"
+                  className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 disabled:opacity-50 cursor-pointer"
                 >
                   {savingItem ? 'Saving...' : 'Add Item'}
                 </button>

@@ -115,13 +115,21 @@ export async function generateInvoicePdf(invoice: any, company: any): Promise<Bu
     let btY = billBoxY + 34;
     if (snap.address) { doc.text(snap.address, 48, btY, { width: PAGE_WIDTH / 2 - 20 }); btY += 12; }
     if (snap.email)   { doc.text(snap.email,   48, btY); btY += 12; }
-    if (snap.gstin)   { doc.text(`GSTIN: ${snap.gstin}`, 48, btY); }
+    if (snap.phone)   { doc.text(snap.phone, 48, btY); btY += 12;}
+    if (snap.gstin)   { doc.text(`GSTIN: ${snap.gstin}`, 48, btY);}
 
     const shipX = 40 + PAGE_WIDTH / 2 + 13;
     doc.fontSize(7).font('Helvetica-Bold').fillColor('#94a3b8')
       .text('SHIP TO', shipX, billBoxY + 8);
-    doc.fontSize(8).font('Helvetica').fillColor('#94a3b8')
-      .text('Same as billing address', shipX, billBoxY + 20);
+    if (invoice.shipping_address) {
+      doc.fontSize(9).font('Helvetica-Bold').fillColor('#1e293b')
+        .text(snap.name, shipX, billBoxY + 20);
+      doc.fontSize(8).font('Helvetica').fillColor('#64748b')
+        .text(invoice.shipping_address, shipX, billBoxY + 32, { width: PAGE_WIDTH / 2 - 20 });
+    } else {
+      doc.fontSize(8).font('Helvetica').fillColor('#94a3b8')
+        .text(snap.address || 'Same as billing address', shipX, billBoxY + 20, { width: PAGE_WIDTH / 2 - 20 });
+    }
 
     // ── Table ─────────────────────────────────────────
     const tableY = billBoxY + 100;
@@ -171,12 +179,20 @@ export async function generateInvoicePdf(invoice: any, company: any): Promise<Bu
     const totY = rowY + 16;
 
     // Tax breakdown box
-    doc.rect(40, totY, PAGE_WIDTH / 2, 50).fill('#f8fafc');
+    const isInterstate = true; // Default to IGST; update to use invoice field when available
+    doc.rect(40, totY, PAGE_WIDTH / 2, 60).fill('#f8fafc');
     doc.fontSize(7).font('Helvetica-Bold').fillColor('#94a3b8')
       .text('TAX BREAKDOWN', 48, totY + 8);
     doc.fontSize(8).font('Helvetica').fillColor('#64748b');
-    doc.text(`IGST: ${fmt(taxTotal)}`, 48, totY + 20);
-    doc.text('(Interstate supply)', 48, totY + 32);
+    if (isInterstate) {
+      doc.text(`IGST: ${fmt(taxTotal)}`, 48, totY + 20);
+      doc.text('(Interstate supply)', 48, totY + 32);
+    } else {
+      const half = taxTotal / 2;
+      doc.text(`CGST: ${fmt(half)}`, 48, totY + 20);
+      doc.text(`SGST: ${fmt(half)}`, 48, totY + 32);
+      doc.text('(Intrastate supply)', 48, totY + 44);
+    }
 
     // Totals
     const totX = 40 + PAGE_WIDTH / 2 + 10;
@@ -197,7 +213,7 @@ export async function generateInvoicePdf(invoice: any, company: any): Promise<Bu
     doc.text(fmt(invoice.total), totX + totW - 60, tY, { width: 60, align: 'right' });
 
     // ── Amount in Words ───────────────────────────────
-    const wordsY = totY + 70;
+    const wordsY = tY + 30; // tY is where Grand Total ended, so this places it below
     doc.rect(40, wordsY, PAGE_WIDTH, 24).fill('#eff6ff');
     doc.fontSize(7).font('Helvetica-Bold').fillColor('#2563eb')
       .text('Amount in Words:', 48, wordsY + 4);

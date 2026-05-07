@@ -119,7 +119,7 @@ export default function InvoicesPage() {
         </div>
         <button
           onClick={() => router.push('/invoices/new')}
-          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700">
+          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 cursor-pointer">
           <Plus className="w-4 h-4" /> New Invoice
         </button>
       </div>
@@ -165,7 +165,7 @@ export default function InvoicesPage() {
           {/* Clear */}
           {hasFilters && (
             <button onClick={clearFilters}
-              className="flex items-center gap-1 px-3 py-2 text-sm text-slate-500 hover:text-slate-700 border border-slate-200 rounded-md hover:bg-slate-50">
+              className="flex items-center gap-1 px-3 py-2 text-sm text-slate-500 hover:text-slate-700 border border-slate-200 rounded-md hover:bg-slate-50 cursor-pointer">
               <X className="w-4 h-4" /> Clear
             </button>
           )}
@@ -185,14 +185,14 @@ export default function InvoicesPage() {
               <p className="text-slate-500 font-medium">No invoices match your current filters.</p>
               <p className="text-slate-400 text-sm mb-4">Try adjusting your search.</p>
               <button onClick={clearFilters}
-                className="text-blue-600 text-sm hover:underline">Clear filters</button>
+                className="text-blue-600 text-sm hover:underline cursor-pointer">Clear filters</button>
             </>
           ) : (
             <>
               <p className="text-slate-500 font-medium">No invoices yet.</p>
               <p className="text-slate-400 text-sm mb-4">Click 'New Invoice' to create your first one.</p>
               <button onClick={() => router.push('/invoices/new')}
-                className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700">
+                className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 cursor-pointer">
                 New Invoice
               </button>
             </>
@@ -216,7 +216,7 @@ export default function InvoicesPage() {
                   <td className="px-4 py-3">
                     <button
                       onClick={() => router.push(`/invoices/${inv._id}`)}
-                      className="font-mono text-blue-600 hover:underline font-medium">
+                      className="font-mono text-blue-600 hover:underline font-medium cursor-pointer">
                       {inv.invoice_number}
                     </button>
                   </td>
@@ -234,7 +234,7 @@ export default function InvoicesPage() {
                   <td className="px-4 py-3 relative">
                     <button
                       onClick={e => { e.stopPropagation(); setActiveMenu(activeMenu === inv._id ? null : inv._id); }}
-                      className="p-1.5 rounded hover:bg-slate-100 text-slate-500">
+                      className="p-1.5 rounded hover:bg-slate-100 text-slate-500 cursor-pointer">
                       <MoreVertical className="w-4 h-4" />
                     </button>
 
@@ -243,37 +243,37 @@ export default function InvoicesPage() {
                         onClick={e => e.stopPropagation()}>
                         <button
                           onClick={() => router.push(`/invoices/${inv._id}`)}
-                          className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">
+                          className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 cursor-pointer">
                           View
                         </button>
                         <button
                           onClick={() => router.push(`/invoices/${inv._id}/edit`)}
-                          className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">
+                          className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 cursor-pointer">
                           Edit
                         </button>
                         {inv.status !== 'sent' && (
                           <button
                             onClick={() => handleStatusChange(inv._id, 'sent')}
-                            className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">
+                            className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 cursor-pointer">
                             Mark as Sent
                           </button>
                         )}
                         {inv.status !== 'paid' && (
                           <button
                             onClick={() => handleStatusChange(inv._id, 'paid')}
-                            className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">
+                            className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 cursor-pointer">
                             Mark as Paid
                           </button>
                         )}
                         <button
                           onClick={() => handleDuplicate(inv._id)}
-                          className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">
+                          className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 cursor-pointer">
                           Duplicate
                         </button>
                         <div className="border-t border-slate-100 my-1" />
                         <button
                           onClick={() => confirmDelete(inv)}
-                          className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50">
+                          className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 cursor-pointer">
                           Delete
                         </button>
                       </div>
@@ -319,11 +319,11 @@ export default function InvoicesPage() {
             </p>
             <div className="flex justify-end gap-3">
               <button onClick={() => setDeleteId(null)}
-                className="px-4 py-2 text-sm rounded-md border border-slate-200 hover:bg-slate-50">
+                className="px-4 py-2 text-sm rounded-md border border-slate-200 hover:bg-slate-50 cursor-pointer">
                 Cancel
               </button>
               <button onClick={handleDelete} disabled={deleting}
-                className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-red-700 disabled:opacity-50">
+                className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-red-700 disabled:opacity-50 cursor-pointer">
                 {deleting && <Loader2 className="w-4 h-4 animate-spin" />}
                 Delete
               </button>

@@ -147,7 +147,7 @@ export default function ItemsPage() {
           </div>
         </div>
         <button onClick={openCreate}
-          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700">
+          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 cursor-pointer">
           <Plus className="w-4 h-4" /> New Item
         </button>
       </div>
@@ -162,7 +162,7 @@ export default function ItemsPage() {
           <p className="text-slate-500 font-medium">No items yet.</p>
           <p className="text-slate-400 text-sm mb-4">Add your first item to the catalogue.</p>
           <button onClick={openCreate}
-            className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700">
+            className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 cursor-pointer">
             Add Item
           </button>
         </div>
@@ -201,11 +201,11 @@ export default function ItemsPage() {
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <button onClick={() => openEdit(item)}
-                        className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-blue-600 transition-colors">
+                        className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-blue-600 transition-colors cursor-pointer">
                         <Pencil className="w-4 h-4" />
                       </button>
                       <button onClick={() => setDeleteId(item._id)}
-                        className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-red-600 transition-colors">
+                        className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-red-600 transition-colors cursor-pointer">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
@@ -226,7 +226,7 @@ export default function ItemsPage() {
                 {editingId ? 'Edit Item' : 'New Item'}
               </h2>
               <button onClick={() => setShowModal(false)}
-                className="text-slate-400 hover:text-slate-600 text-xl">✕</button>
+                className="text-slate-400 hover:text-slate-600 text-xl cursor-pointer">✕</button>
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
 
@@ -271,8 +271,8 @@ export default function ItemsPage() {
                       onClick={() => setForm(p => ({ ...p, item_type: type }))}
                       className={`flex-1 py-2 rounded-md text-sm font-medium border transition-colors capitalize
                         ${form.item_type === type
-                          ? 'bg-blue-600 text-white border-blue-600'
-                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>
+                          ? 'bg-blue-600 text-white border-blue-600 cursor-pointer'
+                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 cursor-pointer'}`}>
                       {type}
                     </button>
                   ))}
@@ -324,11 +324,11 @@ export default function ItemsPage() {
 
               <div className="flex justify-end gap-3 pt-2">
                 <button type="button" onClick={() => setShowModal(false)}
-                  className="px-4 py-2 text-sm rounded-md border border-slate-200 hover:bg-slate-50">
+                  className="px-4 py-2 text-sm rounded-md border border-slate-200 hover:bg-slate-50 cursor-pointer">
                   Cancel
                 </button>
                 <button type="submit" disabled={saving}
-                  className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+                  className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 cursor-pointer">
                   {saving && <Loader2 className="w-4 h-4 animate-spin" />}
                   {editingId ? 'Update' : 'Create'}
                 </button>
@@ -346,11 +346,11 @@ export default function ItemsPage() {
             <p className="text-slate-500 text-sm mb-6">This action cannot be undone.</p>
             <div className="flex justify-end gap-3">
               <button onClick={() => setDeleteId(null)}
-                className="px-4 py-2 text-sm rounded-md border border-slate-200 hover:bg-slate-50">
+                className="px-4 py-2 text-sm rounded-md border border-slate-200 hover:bg-slate-50 cursor-pointer">
                 Cancel
               </button>
               <button onClick={() => handleDelete(deleteId)}
-                className="bg-red-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-red-700">
+                className="bg-red-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-red-700 cursor-pointer">
                 Delete
               </button>
             </div>

@@ -7,6 +7,8 @@ import { generateInvoicePdf } from '../services/pdfService';
 
 const router = Router();
 
+
+
 // Helper to process line items and totals
 const calculateTotals = (items: any[]) => {
   let subtotal = 0, tax_total = 0;
@@ -85,7 +87,8 @@ router.get('/:id', async (req: Request, res: Response) => {
 // CREATE
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const { customer_id, issue_date, due_date, items, notes } = req.body;
+    
+    const { customer_id, issue_date, due_date, items, notes, shipping_address } = req.body;
 
     if (!customer_id || !items?.length) {
       return res.status(400).json({ error: 'Customer ID and items are required' });
@@ -98,6 +101,7 @@ router.post('/', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Due date cannot be in the past' });
     }
 
+
     // 2. Snapshot Customer
     const customer = await Customer.findOne({ _id: customer_id, is_deleted: false });
     if (!customer) return res.status(404).json({ error: 'Customer not found' });
@@ -106,6 +110,7 @@ router.post('/', async (req: Request, res: Response) => {
       _id: customer._id.toString(),
       name: customer.name,
       email: customer.email,
+      phone: customer.phone,
       address: customer.address,
       gstin: customer.gstin,
       country: customer.country,
@@ -121,6 +126,7 @@ router.post('/', async (req: Request, res: Response) => {
       customer_id,
       customer_snapshot,
       issue_date: issue_date ?? new Date(),
+      shipping_address: shipping_address ?? null,
       due_date: due_date ?? null,
       items: processedItems,
       subtotal,
@@ -138,7 +144,7 @@ router.post('/', async (req: Request, res: Response) => {
 // UPDATE
 router.put('/:id', async (req: Request, res: Response) => {
   try {
-    const { customer_id, items, due_date, issue_date, notes, status } = req.body;
+    const { customer_id, items, due_date, issue_date, notes, status, shipping_address } = req.body;
 
     // 1. Validation
     if (due_date && new Date(due_date) < new Date(new Date().setHours(0,0,0,0))) {
@@ -158,6 +164,7 @@ router.put('/:id', async (req: Request, res: Response) => {
           _id: customer._id.toString(),
           name: customer.name,
           email: customer.email,
+          phone: customer.phone,  
           address: customer.address,
           gstin: customer.gstin,
           country: customer.country,
@@ -171,6 +178,7 @@ router.put('/:id', async (req: Request, res: Response) => {
         total,
         notes,
         status,
+        shipping_address: shipping_address ?? null,
       },
       { new: true }
     );
@@ -220,6 +228,26 @@ router.delete('/:id', async (req: Request, res: Response) => {
     res.json({ message: `Invoice ${invoice.invoice_number} deleted` });
   } catch (err) {
     res.status(500).json({ error: 'Delete failed' });
+  }
+});
+
+// STATUS UPDATE
+router.patch('/:id/status', async (req: Request, res: Response) => {
+  try {
+    const { status } = req.body;
+    const validStatuses = ['draft', 'sent', 'paid'];
+    if (!status || !validStatuses.includes(status)) {
+      return res.status(400).json({ error: 'Invalid status. Must be draft, sent, or paid.' });
+    }
+    const updated = await Invoice.findOneAndUpdate(
+      { _id: req.params.id, is_deleted: false },
+      { status },
+      { new: true }
+    );
+    if (!updated) return res.status(404).json({ error: 'Invoice not found' });
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update status' });
   }
 });
 

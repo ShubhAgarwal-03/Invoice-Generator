@@ -31,12 +31,14 @@ export interface LineItem {
   unit_price: number;
   tax_percent: number;
   line_total: number;
+  hsn_sac?: string; 
 }
 
 export interface CustomerSnapshot {
   _id: string;
   name: string;
   email?: string;
+  phone?: string;
   address?: string;
   gstin?: string;
   country: string;
@@ -55,6 +57,7 @@ export interface Invoice {
   subtotal: number;
   tax_total: number;
   total: number;
+  shipping_address?: string | null;
   notes?: string;
   createdAt: string;
 }

@@ -38,6 +38,7 @@ export interface IInvoice extends Document {
   tax_total: number;
   total: number;
   notes?: string;
+  shipping_address?: string | null;
   is_deleted: boolean;
   deletedAt?: Date;
   createdAt: Date;
@@ -63,6 +64,7 @@ const CustomerSnapshotSchema = new Schema<ICustomerSnapshot>({
   gstin: String,
   country: { type: String, required: true },
   currency: { type: String, required: true },
+  phone: String,
 }, { _id: false });
 
 const InvoiceSchema = new Schema<IInvoice>(
@@ -78,6 +80,7 @@ const InvoiceSchema = new Schema<IInvoice>(
     tax_total: { type: Number, required: true },
     total: { type: Number, required: true },
     notes: { type: String },
+    shipping_address: { type: String, default: null },
     is_deleted: { type: Boolean, default: false },
     deletedAt: { type: Date },
   },

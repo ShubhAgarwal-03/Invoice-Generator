@@ -42,16 +42,18 @@ function numberToWords(amount: number): string {
   return result.trim() + ' Only';
 }
 
-function getTaxBreakdown(items: Invoice['items'], country: string) {
-  const isIGST = country !== 'IN' || true; // simplified: use IGST for all for now
+function getTaxBreakdown(items: Invoice['items'], country: string, isInterstate: boolean = true) {
   let totalTax = 0;
   items.forEach(item => {
     const base = item.quantity * item.unit_price;
     totalTax += base * (item.tax_percent / 100);
   });
 
-  // For Indian invoices: split into CGST + SGST (intrastate) or IGST (interstate)
-  // Defaulting to IGST for simplicity
+  // For Indian invoices: IGST for interstate, CGST+SGST for intrastate
+  // Default to IGST (interstate) — can be made configurable via invoice field later
+  if (country === 'IN' && !isInterstate) {
+    return { igst: 0, cgst: totalTax / 2, sgst: totalTax / 2 };
+  }
   return { igst: totalTax, cgst: 0, sgst: 0 };
 }
 
@@ -121,7 +123,9 @@ export default function InvoiceDetailPage() {
     toast.info('Preparing your PDF…');
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3333';
-      const res = await fetch(`${apiUrl}/api/invoices/${id}/pdf`);
+      const res = await fetch(`${apiUrl}/api/invoices/${id}/pdf`, {
+        signal: AbortSignal.timeout(90000), // 90 second timeout for Render cold start
+      });
       if (!res.ok) throw new Error('PDF generation failed');
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -147,7 +151,7 @@ export default function InvoiceDetailPage() {
   if (!invoice) return <div className="text-center py-20 text-slate-500">Invoice not found.</div>;
 
   const fmt = (n: number) => formatCurrency(n, invoice.customer_snapshot.currency, invoice.customer_snapshot.country);
-  const taxBreakdown = getTaxBreakdown(invoice.items, invoice.customer_snapshot.country);
+  const taxBreakdown = getTaxBreakdown(invoice.items, invoice.customer_snapshot.country, true);
 
   return (
     <div className="max-w-5xl">
@@ -254,6 +258,9 @@ export default function InvoiceDetailPage() {
               {invoice.customer_snapshot.address && (
                 <p className="text-sm text-slate-500 mt-1">{invoice.customer_snapshot.address}</p>
               )}
+              {(invoice.customer_snapshot as any).phone && (
+                <p className="text-sm text-slate-500">{(invoice.customer_snapshot as any).phone}</p>
+              )}
               {invoice.customer_snapshot.email && (
                 <p className="text-sm text-slate-500">{invoice.customer_snapshot.email}</p>
               )}
@@ -265,9 +272,18 @@ export default function InvoiceDetailPage() {
             </div>
             <div>
               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Ship To</p>
-              <p className="text-sm text-slate-500 italic">Same as billing address</p>
-            </div>
+              {invoice.shipping_address ? (
+                <p className="text-sm text-slate-700">{invoice.shipping_address}</p>
+            ) : (
+              <>
+              <p className="font-bold text-slate-800 text-base">{invoice.customer_snapshot.name}</p>
+              <p className="text-sm text-slate-500 italic mt-1">
+                  {invoice.customer_snapshot.address || 'Same as billing address'}
+              </p>
+            </>
+          )}
           </div>
+        </div>
 
           {/* Line Items Table */}
           <div>
@@ -302,67 +318,68 @@ export default function InvoiceDetailPage() {
           </div>
 
           {/* Totals + Tax Breakdown */}
-          <div className="flex gap-6 justify-between">
+          <div className="space-y-4">
 
-            {/* Amount in Words + Bank Details */}
-            <div className="flex-1 space-y-4">
-              <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Amount in Words</p>
-                <p className="text-sm text-slate-700 font-medium italic">
-                  {numberToWords(invoice.total)}
-                </p>
-              </div>
-
-              {(company?.bank_name || company?.account_number) && (
-                <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Bank Details</p>
-                  <div className="text-xs text-slate-600 space-y-1">
-                    {company.bank_name && <p><span className="font-semibold">Bank:</span> {company.bank_name}</p>}
-                    {company.account_number && <p><span className="font-semibold">Account No:</span> {company.account_number}</p>}
-                    {company.ifsc_code && <p><span className="font-semibold">IFSC:</span> {company.ifsc_code}</p>}
-                    {company.branch && <p><span className="font-semibold">Branch:</span> {company.branch}</p>}
-                  </div>
-                </div>
-              )}
+          {/* Totals summary — right aligned */}
+          <div className="flex justify-end">
+          <div className="w-72">
+          <div className="border border-slate-200 rounded-lg overflow-hidden">
+          <div className="bg-slate-50 px-4 py-2 border-b border-slate-200">
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Summary</p>
+          </div>
+          <div className="p-4 space-y-2 text-sm">
+            <div className="flex justify-between text-slate-600">
+              <span>Subtotal</span><span>{fmt(invoice.subtotal)}</span>
             </div>
-
-            {/* Totals */}
-            <div className="w-72">
-              <div className="border border-slate-200 rounded-lg overflow-hidden">
-                <div className="bg-slate-50 px-4 py-2 border-b border-slate-200">
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Summary</p>
-                </div>
-                <div className="p-4 space-y-2 text-sm">
-                  <div className="flex justify-between text-slate-600">
-                    <span>Subtotal</span><span>{fmt(invoice.subtotal)}</span>
-                  </div>
-                  {/* Tax Breakdown */}
-                  {taxBreakdown.igst > 0 && (
-                    <div className="flex justify-between text-slate-500 text-xs">
-                      <span>IGST</span><span>{fmt(taxBreakdown.igst)}</span>
-                    </div>
-                  )}
-                  {taxBreakdown.cgst > 0 && (
-                    <div className="flex justify-between text-slate-500 text-xs">
-                      <span>CGST</span><span>{fmt(taxBreakdown.cgst)}</span>
-                    </div>
-                  )}
-                  {taxBreakdown.sgst > 0 && (
-                    <div className="flex justify-between text-slate-500 text-xs">
-                      <span>SGST</span><span>{fmt(taxBreakdown.sgst)}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between text-slate-600">
-                    <span>Tax Total</span><span>{fmt(invoice.tax_total)}</span>
-                  </div>
-                  <div className="border-t border-slate-200 pt-2 flex justify-between font-bold text-slate-800 text-base">
-                    <span>Grand Total</span><span>{fmt(invoice.total)}</span>
-                  </div>
-                </div>
+            {taxBreakdown.igst > 0 && (
+              <div className="flex justify-between text-slate-500 text-xs">
+                <span>IGST</span><span>{fmt(taxBreakdown.igst)}</span>
               </div>
+            )}
+            {taxBreakdown.cgst > 0 && (
+              <div className="flex justify-between text-slate-500 text-xs">
+                <span>CGST</span><span>{fmt(taxBreakdown.cgst)}</span>
+              </div>
+            )}
+            {taxBreakdown.sgst > 0 && (
+              <div className="flex justify-between text-slate-500 text-xs">
+                <span>SGST</span><span>{fmt(taxBreakdown.sgst)}</span>
+              </div>
+            )}
+            <div className="flex justify-between text-slate-600">
+              <span>Tax Total</span><span>{fmt(invoice.tax_total)}</span>
+            </div>
+            <div className="border-t border-slate-200 pt-2 flex justify-between font-bold text-slate-800 text-base">
+              <span>Grand Total</span><span>{fmt(invoice.total)}</span>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
 
+          {/* Amount in Words — full width, below Grand Total */}
+          <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
+            <p className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-1">Amount in Words</p>
+              <p className="text-sm text-slate-700 font-medium italic">
+              {numberToWords(invoice.total)}
+            </p>
+          </div>
+
+          {/* Bank Details — full width */}
+          {(company?.bank_name || company?.account_number) && (
+          <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Bank Details</p>
+            <div className="text-xs text-slate-600 space-y-1">
+              {company.bank_name && <p><span className="font-semibold">Bank:</span> {company.bank_name}</p>}
+              {company.account_number && <p><span className="font-semibold">Account No:</span> {company.account_number}</p>}
+              {company.ifsc_code && <p><span className="font-semibold">IFSC:</span> {company.ifsc_code}</p>}
+              {company.branch && <p><span className="font-semibold">Branch:</span> {company.branch}</p>}
+            </div>
+          </div>
+        )}
+        </div>
+
+          
           {/* Notes */}
           {invoice.notes && (
             <div className="bg-amber-50 border border-amber-100 rounded-lg p-4">

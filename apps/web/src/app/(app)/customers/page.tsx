@@ -122,7 +122,7 @@ export default function CustomersPage() {
           </div>
         </div>
         <button onClick={openCreate}
-          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700">
+          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 cursor-pointer">
           <Plus className="w-4 h-4" /> New Customer
         </button>
       </div>
@@ -138,7 +138,7 @@ export default function CustomersPage() {
           <p className="text-slate-500 font-medium">No customers yet.</p>
           <p className="text-slate-400 text-sm mb-4">Add your first customer to get started.</p>
           <button onClick={openCreate}
-            className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700">
+            className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 cursor-pointer">
             Add Customer
           </button>
         </div>
@@ -165,11 +165,11 @@ export default function CustomersPage() {
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <button onClick={() => openEdit(c)}
-                        className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-blue-600 transition-colors">
+                        className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-blue-600 transition-colors cursor-pointer">
                         <Pencil className="w-4 h-4" />
                       </button>
                       <button onClick={() => setDeleteId(c._id)}
-                        className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-red-600 transition-colors">
+                        className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-red-600 transition-colors cursor-pointer">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
@@ -189,7 +189,7 @@ export default function CustomersPage() {
               <h2 className="font-semibold text-slate-800">
                 {editingId ? 'Edit Customer' : 'New Customer'}
               </h2>
-              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600 text-xl">✕</button>
+              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600 text-xl cursor-pointer">✕</button>
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               <div>
@@ -239,11 +239,11 @@ export default function CustomersPage() {
 
               <div className="flex justify-end gap-3 pt-2">
                 <button type="button" onClick={() => setShowModal(false)}
-                  className="px-4 py-2 text-sm rounded-md border border-slate-200 hover:bg-slate-50">
+                  className="px-4 py-2 text-sm rounded-md border border-slate-200 hover:bg-slate-50 cursor-pointer">
                   Cancel
                 </button>
                 <button type="submit" disabled={saving}
-                  className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+                  className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 cursor-pointer">
                   {saving && <Loader2 className="w-4 h-4 animate-spin" />}
                   {editingId ? 'Update' : 'Create'}
                 </button>
@@ -263,11 +263,11 @@ export default function CustomersPage() {
             </p>
             <div className="flex justify-end gap-3">
               <button onClick={() => setDeleteId(null)}
-                className="px-4 py-2 text-sm rounded-md border border-slate-200 hover:bg-slate-50">
+                className="px-4 py-2 text-sm rounded-md border border-slate-200 hover:bg-slate-50 cursor-pointer">
                 Cancel
               </button>
               <button onClick={() => handleDelete(deleteId)}
-                className="bg-red-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-red-700">
+                className="bg-red-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-red-700 cursor-pointer">
                 Delete
               </button>
             </div>
