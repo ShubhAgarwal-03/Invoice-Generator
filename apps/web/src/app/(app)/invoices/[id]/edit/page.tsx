@@ -21,11 +21,11 @@ interface LineItem {
 const today = new Date().toISOString().split('T')[0];
 
 const emptyLine = (): LineItem => ({
-  description: '', 
-  quantity: '1', 
-  unit_price: '0', 
+  description: '',
+  quantity: '1',
+  unit_price: '0',
   tax_percent: '0',
-   hsn_sac: '',
+  hsn_sac: '',
 });
 
 const COUNTRIES = [
@@ -58,6 +58,9 @@ export default function EditInvoicePage() {
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [differentShipping, setDifferentShipping] = useState(false);
+  const [shippingAddress, setShippingAddress] = useState('');
+  const [isInterstate, setIsInterstate] = useState(true);
 
   // Modals
   const [showCustomerModal, setShowCustomerModal] = useState(false);
@@ -71,14 +74,8 @@ export default function EditInvoicePage() {
   });
   const [savingItem, setSavingItem] = useState(false);
 
-  const [differentShipping, setDifferentShipping] = useState(false);
-  const [shippingAddress, setShippingAddress] = useState('');
-
-  const [isInterstate, setIsInterstate] = useState(true);
-
   useEffect(() => {
     let isMounted = true;
-    
     const loadInitialData = async () => {
       try {
         const [inv, allCustomers, allItems] = await Promise.all([
@@ -86,14 +83,10 @@ export default function EditInvoicePage() {
           customersService.getAll(),
           itemsService.getAll(),
         ]);
-
         if (!isMounted) return;
-
         setInvoice(inv);
         setCustomers(allCustomers);
         setItems(allItems);
-
-        // Pre-fill form
         setCustomerId(inv.customer_id);
         setIssueDate(inv.issue_date.split('T')[0]);
         setDueDate(inv.due_date ? inv.due_date.split('T')[0] : '');
@@ -111,16 +104,14 @@ export default function EditInvoicePage() {
           tax_percent: String(l.tax_percent),
           hsn_sac: l.hsn_sac ?? '',
         })));
-
         const found = allCustomers.find(cu => cu._id === inv.customer_id);
         setSelectedCustomer(found ?? null);
-      } catch (err) {
+      } catch {
         toast.error('Failed to load invoice');
       } finally {
         if (isMounted) setLoading(false);
       }
     };
-
     loadInitialData();
     return () => { isMounted = false; };
   }, [id]);
@@ -130,7 +121,6 @@ export default function EditInvoicePage() {
     setSelectedCustomer(c);
   }, [customerId, customers]);
 
-  // Calculations
   function calcLine(line: LineItem) {
     const qty = parseFloat(line.quantity) || 0;
     const price = parseFloat(line.unit_price) || 0;
@@ -148,7 +138,6 @@ export default function EditInvoicePage() {
   const country = selectedCustomer?.country ?? invoice?.customer_snapshot.country ?? 'US';
   const fmt = (n: number) => formatCurrency(n, currency, country);
 
-  // Handlers
   function updateLine(index: number, field: keyof LineItem, value: string) {
     setLineItems(prev => prev.map((l, i) => i === index ? { ...l, [field]: value } : l));
   }
@@ -168,33 +157,26 @@ export default function EditInvoicePage() {
       description: item.description ?? item.name,
       unit_price: String(item.unit_price),
       tax_percent: String(item.tax_percent),
+      hsn_sac: item.hsn_sac ?? '',
     } : l));
   }
 
   function validate() {
     const e: Record<string, string> = {};
     if (!customerId) e.customer = 'Please select a customer';
-    if (!issueDate) e.issueDate = 'Issue date is required';
     if (dueDate && dueDate < today) e.dueDate = 'Due date must be today or a future date';
-    
     lineItems.forEach((l, i) => {
       if (!l.description.trim()) e[`desc_${i}`] = 'Required';
       if (!l.quantity || parseFloat(l.quantity) < 0.01) e[`qty_${i}`] = 'Min 0.01';
       if (parseFloat(l.tax_percent) > 99) e[`tax_${i}`] = 'Max 99%';
     });
-    
     setErrors(e);
     return Object.keys(e).length === 0;
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    
-    if (!validate()) {
-      toast.error('Please fix validation errors');
-      return;
-    }
-
+    if (!validate()) { toast.error('Please fix validation errors'); return; }
     setSaving(true);
     try {
       const payload = {
@@ -213,7 +195,6 @@ export default function EditInvoicePage() {
           hsn_sac: l.hsn_sac.trim() || undefined,
         })),
       };
-
       await invoicesService.update(id, payload as any);
       toast.success('Invoice updated successfully');
       router.push(`/invoices/${id}`);
@@ -267,13 +248,13 @@ export default function EditInvoicePage() {
     }
   }
 
-  const inputClass = "w-full border border-slate-200 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 transition-all";
+  const inputClass = "w-full border border-slate-200 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500";
   const errorClass = "text-red-500 text-xs mt-0.5";
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center h-96 gap-4">
       <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-      <p className="text-slate-500 text-sm animate-pulse">Loading invoice details...</p>
+      <p className="text-slate-500 text-sm">Loading invoice...</p>
     </div>
   );
 
@@ -282,367 +263,338 @@ export default function EditInvoicePage() {
   );
 
   return (
-    <div className="max-w-5xl mx-auto pb-20">
+    <div className="max-w-5xl pb-20">
+
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
-        <div className="flex items-center gap-3">
-          <button 
-            type="button"
-            onClick={() => router.push(`/invoices/${id}`)}
-            className="p-2 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
-          >
-            <ArrowLeft className="w-5 h-5 text-slate-500" />
-          </button>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2 cursor-pointer">
-              <FileText className="w-6 h-6 text-blue-600" />
-              Edit {invoice.invoice_number}
-            </h1>
-            <p className="text-slate-500 text-sm">Update the details for this invoice</p>
-          </div>
+      <div className="flex items-center gap-3 mb-8">
+        <button type="button" onClick={() => router.push(`/invoices/${id}`)}
+          className="p-2 hover:bg-slate-100 rounded-full transition-colors cursor-pointer">
+          <ArrowLeft className="w-5 h-5 text-slate-500" />
+        </button>
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+            <FileText className="w-6 h-6 text-blue-600" />
+            Edit {invoice.invoice_number}
+          </h1>
+          <p className="text-slate-500 text-sm">Update the details for this invoice</p>
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Top Section: Customer & Dates */}
-        <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+
+        {/* Invoice Details */}
+        <div className="bg-white rounded-xl border border-slate-200 p-6">
+          <h2 className="font-semibold text-slate-700 mb-4">Invoice Details</h2>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+
+            {/* Customer */}
             <div className="md:col-span-1">
-              <label className="text-sm font-semibold text-slate-700">Customer *</label>
-              <div className="flex gap-2 mt-1.5">
-                <select 
-                  value={customerId} 
-                  onChange={e => setCustomerId(e.target.value)}
-                  className={inputClass}
-                >
+              <label className="text-sm font-medium text-slate-700">
+                Customer <span className="text-red-500">*</span>
+              </label>
+              <div className="flex gap-2 mt-1">
+                <select value={customerId} onChange={e => setCustomerId(e.target.value)}
+                  className={inputClass}>
                   <option value="">Select customer...</option>
                   {customers.map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
                 </select>
-                <button 
-                  type="button" 
-                  onClick={() => setShowCustomerModal(true)}
-                  className="shrink-0 p-2 border border-slate-200 rounded-md hover:bg-slate-50 text-blue-600 cursor-pointer"
-                >
-                  <Plus className="w-5 h-5" />
+                <button type="button" onClick={() => setShowCustomerModal(true)}
+                  className="shrink-0 p-2 border border-slate-200 rounded-md hover:bg-slate-50 text-slate-500 cursor-pointer">
+                  <Plus className="w-4 h-4" />
                 </button>
               </div>
               {errors.customer && <p className={errorClass}>{errors.customer}</p>}
               {selectedCustomer && (
-                <div className="mt-3 p-3 bg-blue-50/50 rounded-lg text-xs text-slate-600 space-y-1 border border-blue-100">
-                  <p className="font-semibold text-blue-700">{selectedCustomer.name}</p>
-                  <p>{selectedCustomer.email}</p>
-                  <p className="pt-1 font-medium">Currency: {selectedCustomer.currency}</p>
+                <div className="mt-2 p-2 bg-slate-50 rounded text-xs text-slate-500 space-y-0.5">
+                  {selectedCustomer.email && <p>{selectedCustomer.email}</p>}
+                  {selectedCustomer.address && <p>{selectedCustomer.address}</p>}
+                  <p className="font-medium text-slate-600">
+                    Currency: <span className="text-blue-600">{selectedCustomer.currency}</span>
+                  </p>
                 </div>
               )}
             </div>
 
+            {/* Issue Date */}
             <div>
-            <label className="text-sm font-medium text-slate-700">
-            Issue Date <span className="text-red-500">*</span>
-            </label>
-            <input 
-              type="date" 
-              value={issueDate}
-              readOnly
-              className={`${inputClass} mt-1 bg-slate-50 cursor-not-allowed text-slate-500`} 
-            />
-          <p className="text-xs text-slate-400 mt-0.5">Issue date cannot be changed</p>
-        </div>
+              <label className="text-sm font-medium text-slate-700">
+                Issue Date <span className="text-red-500">*</span>
+              </label>
+              <input type="date" value={issueDate} readOnly
+                className={`${inputClass} mt-1 bg-slate-50 cursor-not-allowed text-slate-400`} />
+              <p className="text-xs text-slate-400 mt-0.5">Cannot be changed</p>
+            </div>
 
+            {/* Due Date */}
             <div>
               <label className="text-sm font-medium text-slate-700">Due Date</label>
-              <input 
-                type="date" 
-                value={dueDate}
-                min={today}
+              <input type="date" value={dueDate} min={today}
                 onChange={e => setDueDate(e.target.value)}
-                className={`${inputClass} mt-1`} 
-              />
-            {errors.dueDate && <p className={errorClass}>{errors.dueDate}</p>}
-          </div>
+                className={`${inputClass} mt-1`} />
+              {errors.dueDate && <p className={errorClass}>{errors.dueDate}</p>}
+            </div>
 
+            {/* Status */}
             <div>
-              <label className="text-sm font-semibold text-slate-700">Status</label>
-              <select 
-                value={status} 
-                onChange={e => setStatus(e.target.value as InvoiceStatus)}
-                className={`${inputClass} mt-1.5 capitalize`}
-              >
+              <label className="text-sm font-medium text-slate-700">Status</label>
+              <select value={status} onChange={e => setStatus(e.target.value as InvoiceStatus)}
+                className={`${inputClass} mt-1`}>
                 {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
+
           </div>
         </div>
 
-
-        {/* Shipping Address */}
+        {/* Line Items */}
         <div className="bg-white rounded-xl border border-slate-200 p-6">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold text-slate-700">Shipping Address</h2>
-          <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={differentShipping}
-              onChange={e => {
-                setDifferentShipping(e.target.checked);
-                if (!e.target.checked) setShippingAddress('');
-              }}
-            className="rounded border-slate-300 cursor-pointer"
-            />
-          Different from billing address
-          </label>
-        </div>
-        {differentShipping ? (
-        <input
-          value={shippingAddress}
-          onChange={e => setShippingAddress(e.target.value)}
-          placeholder="Enter shipping address..."
-          className="w-full border border-slate-200 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-        />
-        ) : (
-        <p className="text-sm text-slate-400 italic">
-          {selectedCustomer?.address || 'Same as billing address'}
-        </p>
-        )}
-        </div>
-
-        
-        <div className="bg-white rounded-xl border border-slate-200 p-6">
-          <h2 className="font-semibold text-slate-700 mb-3">Tax Type</h2>
-          <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={isInterstate}
-              onChange={e => setIsInterstate(e.target.checked)}
-              className="rounded border-slate-300 cursor-pointer"
-            />
-          Interstate supply (IGST) — uncheck for intrastate (CGST + SGST)
-          </label>
-        </div>
-
-        {/* Line Items Section */}
-        <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="font-bold text-slate-800">Line Items</h2>
-            <button 
-              type="button" 
-              onClick={() => setShowItemModal(true)}
-              className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 rounded-lg transition-colors cursor-pointer"
-            >
-              <Plus className="w-4 h-4" /> Add New to Catalogue
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-slate-700">Line Items</h2>
+            <button type="button" onClick={() => setShowItemModal(true)}
+              className="text-xs text-blue-600 hover:underline flex items-center gap-1 cursor-pointer">
+              <Plus className="w-3 h-3" /> New Item
             </button>
           </div>
 
-          <div className="space-y-4">
-            {/* Table Header */}
-            <div className="hidden md:grid grid-cols-12 gap-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1">
-              <div className="col-span-2">Catalogue</div>
-              <div className="col-span-4">Description</div>
-              <div className="col-span-1">Qty</div>
-              <div className="col-span-2">Price</div>
-              <div className="col-span-1">Tax %</div>
-              <div className="col-span-2 text-xs font-bold text-slate-400 uppercase tracking-wider">HSN/SAC</div>
-              <div className="col-span-1 text-right">Total</div>
-              <div className="col-span-1"></div>
-            </div>
-            
+          {/* Currency warning */}
+          {selectedCustomer && (
+            <p className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded px-3 py-2 mb-4">
+              ⚠ Prices are in <strong>{selectedCustomer.currency}</strong>. Item catalogue prices will be treated as {selectedCustomer.currency}.
+            </p>
+          )}
 
+          {/* Desktop header */}
+          <div className="hidden md:grid grid-cols-12 gap-2 text-xs font-semibold text-slate-400 uppercase tracking-wide px-1 mb-2">
+            <div className="col-span-2">Catalogue</div>
+            <div className="col-span-3">Description</div>
+            <div className="col-span-2">HSN/SAC</div>
+            <div className="col-span-1">Qty</div>
+            <div className="col-span-1">Price</div>
+            <div className="col-span-1">Tax %</div>
+            <div className="col-span-1 text-right">Total</div>
+            <div className="col-span-1"></div>
+          </div>
+
+          <div className="space-y-3">
             {lineItems.map((line, i) => {
               const { total } = calcLine(line);
               return (
-                <div key={i} className="grid grid-cols-12 gap-3 items-start p-2 rounded-lg hover:bg-slate-50 transition-colors">
+                <div key={i} className="grid grid-cols-12 gap-2 items-start">
+
+                  {/* Catalogue */}
                   <div className="col-span-12 md:col-span-2">
-                    <select 
-                      onChange={e => fillFromItem(i, e.target.value)}
-                      defaultValue=""
-                      className={inputClass}
-                    >
+                    <select onChange={e => fillFromItem(i, e.target.value)}
+                      defaultValue="" className={inputClass}>
                       <option value="">Pick item...</option>
-                      {items.map(item => <option key={item._id} value={item._id}>{item.name}</option>)}
+                      {items.map(item => (
+                        <option key={item._id} value={item._id}>{item.name}</option>
+                      ))}
                     </select>
                   </div>
 
-                  <div className="col-span-12 md:col-span-4">
-                    <input 
-                      value={line.description}
+                  {/* Description */}
+                  <div className="col-span-12 md:col-span-3">
+                    <input value={line.description}
                       onChange={e => updateLine(i, 'description', e.target.value)}
-                      placeholder="Line item description"
-                      className={inputClass} 
-                    />
+                      placeholder="Description" className={inputClass} />
                     {errors[`desc_${i}`] && <p className={errorClass}>{errors[`desc_${i}`]}</p>}
                   </div>
 
                   {/* HSN/SAC */}
                   <div className="col-span-12 md:col-span-2">
-                    <input
-                      value={line.hsn_sac}
+                    <input value={line.hsn_sac}
                       onChange={e => updateLine(i, 'hsn_sac', e.target.value)}
-                      placeholder="HSN/SAC"
-                      className={inputClass}
-                    />
+                      placeholder="HSN/SAC" className={inputClass} />
                   </div>
 
+                  {/* Qty */}
                   <div className="col-span-4 md:col-span-1">
-                    <input 
-                      type="number" 
-                      value={line.quantity} 
-                      min="1" 
+                    <input type="number" value={line.quantity} min="1"
                       onChange={e => updateLine(i, 'quantity', e.target.value)}
-                      className={inputClass} 
-                    />
+                      placeholder="1" className={inputClass} />
+                    {errors[`qty_${i}`] && <p className={errorClass}>{errors[`qty_${i}`]}</p>}
                   </div>
 
-                  <div className="col-span-4 md:col-span-2">
-                    <input 
-                      type="number" 
-                      value={line.unit_price} 
-                      step="0.01"
-                      onChange={e => updateLine(i, 'unit_price', e.target.value)}
-                      className={inputClass} 
-                    />
-                  </div>
-
+                  {/* Unit Price */}
                   <div className="col-span-4 md:col-span-1">
-                    <input 
-                      type="number" 
-                      value={line.tax_percent} 
+                    <input type="number" value={line.unit_price} step="0.01"
+                      onChange={e => updateLine(i, 'unit_price', e.target.value)}
+                      placeholder="0.00" className={inputClass} />
+                  </div>
+
+                  {/* Tax % */}
+                  <div className="col-span-3 md:col-span-1">
+                    <input type="number" value={line.tax_percent} min="0" max="99"
                       onChange={e => updateLine(i, 'tax_percent', e.target.value)}
-                      className={inputClass} 
-                    />
+                      placeholder="0" className={inputClass} />
+                    {errors[`tax_${i}`] && <p className={errorClass}>{errors[`tax_${i}`]}</p>}
                   </div>
 
-                  <div className="col-span-10 md:col-span-1 flex items-center justify-end h-10">
-                    <span className="text-sm font-bold text-slate-700">{fmt(total)}</span>
+                  {/* Line Total */}
+                  <div className="col-span-1 flex items-center justify-end">
+                    <span className="text-sm font-medium text-slate-700 whitespace-nowrap">
+                      {fmt(total)}
+                    </span>
                   </div>
 
-                  <div className="col-span-2 md:col-span-1 flex items-center justify-center h-10">
-                    <button 
-                      type="button" 
-                      onClick={() => removeLine(i)}
+                  {/* Remove */}
+                  <div className="col-span-1 flex items-center justify-center">
+                    <button type="button" onClick={() => removeLine(i)}
                       disabled={lineItems.length === 1}
-                      className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg disabled:opacity-0 transition-all cursor-pointer"
-                    >
+                      className="p-1.5 text-slate-400 hover:text-red-500 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
+
                 </div>
               );
             })}
           </div>
 
-          <button 
-            type="button" 
-            onClick={addLine}
-            className="mt-6 flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 font-bold cursor-pointer"
-          >
-            <Plus className="w-4 h-4" /> Add Another Line
+          <button type="button" onClick={addLine}
+            className="mt-4 flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 font-medium cursor-pointer">
+            <Plus className="w-4 h-4" /> Add Line
           </button>
 
-          {/* Totals Summary */}
-          <div className="mt-8 pt-6 border-t border-slate-100 flex justify-end">
-            <div className="w-full max-w-xs space-y-3">
-              <div className="flex justify-between text-sm text-slate-500">
-                <span>Subtotal</span>
-                <span>{fmt(subtotal)}</span>
+          {/* Totals */}
+          <div className="mt-6 border-t border-slate-200 pt-4 flex justify-end">
+            <div className="w-64 space-y-2 text-sm">
+              <div className="flex justify-between text-slate-600">
+                <span>Subtotal</span><span>{fmt(subtotal)}</span>
               </div>
-              <div className="flex justify-between text-sm text-slate-500">
-                <span>Tax Total</span>
-                <span>{fmt(taxTotal)}</span>
+              <div className="flex justify-between text-slate-600">
+                <span>Tax</span><span>{fmt(taxTotal)}</span>
               </div>
-              <div className="flex justify-between font-bold text-slate-900 text-lg pt-3 border-t border-slate-200">
-                <span>Total Amount</span>
-                <span className="text-blue-600">{fmt(grandTotal)}</span>
+              <div className="flex justify-between font-bold text-slate-800 text-base border-t border-slate-200 pt-2">
+                <span>Total</span><span>{fmt(grandTotal)}</span>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Notes */}
-        <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-          <label className="font-bold text-slate-800 block mb-3">Invoice Notes</label>
-          <textarea 
-            value={notes} 
-            onChange={e => setNotes(e.target.value)}
-            placeholder="Additional details (e.g. Bank Account details, T&C)..."
-            rows={4}
-            className={`${inputClass} resize-none`} 
-          />
+        {/* Shipping Address */}
+        <div className="bg-white rounded-xl border border-slate-200 p-6">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-semibold text-slate-700">Shipping Address</h2>
+            <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
+              <input type="checkbox" checked={differentShipping}
+                onChange={e => {
+                  setDifferentShipping(e.target.checked);
+                  if (!e.target.checked) setShippingAddress('');
+                }}
+                className="rounded border-slate-300 cursor-pointer" />
+              Different from billing address
+            </label>
+          </div>
+          {differentShipping ? (
+            <input value={shippingAddress} onChange={e => setShippingAddress(e.target.value)}
+              placeholder="Enter shipping address..."
+              className={inputClass} />
+          ) : (
+            <p className="text-sm text-slate-400 italic">
+              {selectedCustomer?.address || 'Same as billing address'}
+            </p>
+          )}
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex justify-end items-center gap-4">
-          <button 
-            type="button" 
-            onClick={() => router.push(`/invoices/${id}`)}
-            className="px-6 py-2.5 text-sm font-semibold text-slate-600 hover:text-slate-800 transition-colors cursor-pointer"
-          >
+        {/* Tax Type */}
+        <div className="bg-white rounded-xl border border-slate-200 p-6">
+          <h2 className="font-semibold text-slate-700 mb-3">Tax Type</h2>
+          <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
+            <input type="checkbox" checked={isInterstate}
+              onChange={e => setIsInterstate(e.target.checked)}
+              className="rounded border-slate-300 cursor-pointer" />
+            Interstate supply (IGST) — uncheck for intrastate (CGST + SGST)
+          </label>
+        </div>
+
+        {/* Notes */}
+        <div className="bg-white rounded-xl border border-slate-200 p-6">
+          <h2 className="font-semibold text-slate-700 mb-4">Notes</h2>
+          <textarea value={notes} onChange={e => setNotes(e.target.value)}
+            placeholder="Payment terms, bank details, or any other notes..."
+            rows={3}
+            className="w-full border border-slate-200 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+        </div>
+
+        {/* Actions */}
+        <div className="flex justify-end gap-3">
+          <button type="button" onClick={() => router.push(`/invoices/${id}`)}
+            className="px-4 py-2 text-sm rounded-md border border-slate-200 hover:bg-slate-50 cursor-pointer">
             Cancel
           </button>
-          <button 
-            type="submit" 
-            disabled={saving}
-            className="bg-blue-600 text-white px-8 py-2.5 rounded-lg text-sm font-bold hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-blue-200 transition-all active:scale-95 cursor-pointer"
-          >
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+          <button type="submit" disabled={saving}
+            className="flex items-center gap-2 bg-blue-600 text-white px-6 py-2 rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 cursor-pointer">
+            {saving && <Loader2 className="w-4 h-4 animate-spin" />}
             Save Changes
           </button>
         </div>
+
       </form>
 
-      {/* Customer Modal Implementation (same UI as you had, but ensures state updates correctly) */}
+      {/* Customer Modal */}
       {showCustomerModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-              <h2 className="font-bold text-slate-800">New Customer</h2>
-              <button onClick={() => setShowCustomerModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
-                <X className="w-5 h-5" />
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+              <h2 className="font-semibold text-slate-800">New Customer</h2>
+              <button onClick={() => setShowCustomerModal(false)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer">
+                <X className="w-4 h-4" />
               </button>
             </div>
             <form onSubmit={handleCreateCustomer} className="p-6 space-y-4">
               <div>
-                <label className="text-xs font-bold text-slate-500 uppercase">Customer Name *</label>
-                <input 
-                  autoFocus
-                  value={customerForm.name}
+                <label className="text-sm font-medium text-slate-700">Name *</label>
+                <input value={customerForm.name}
                   onChange={e => setCustomerForm(p => ({ ...p, name: e.target.value }))}
-                  className={`${inputClass} mt-1`} placeholder="e.g. Acme Corp" 
-                />
+                  className={`${inputClass} mt-1`} placeholder="John Doe" />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-bold text-slate-500 uppercase">Email</label>
-                  <input 
-                    value={customerForm.email}
+                  <label className="text-sm font-medium text-slate-700">Email</label>
+                  <input value={customerForm.email}
                     onChange={e => setCustomerForm(p => ({ ...p, email: e.target.value }))}
-                    className={`${inputClass} mt-1`} placeholder="contact@acme.com" 
-                  />
+                    className={`${inputClass} mt-1`} placeholder="john@example.com" />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-500 uppercase">Country</label>
-                  <select 
-                    value={customerForm.country}
+                  <label className="text-sm font-medium text-slate-700">Phone</label>
+                  <input value={customerForm.phone}
+                    onChange={e => setCustomerForm(p => ({ ...p, phone: e.target.value }))}
+                    className={`${inputClass} mt-1`} placeholder="+91 98765 43210" />
+                </div>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-slate-700">Address</label>
+                <input value={customerForm.address}
+                  onChange={e => setCustomerForm(p => ({ ...p, address: e.target.value }))}
+                  className={`${inputClass} mt-1`} placeholder="123 Main St, City" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-sm font-medium text-slate-700">Country *</label>
+                  <select value={customerForm.country}
                     onChange={e => setCustomerForm(p => ({ ...p, country: e.target.value }))}
-                    className={`${inputClass} mt-1`}
-                  >
+                    className={`${inputClass} mt-1`}>
                     {COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
                   </select>
                 </div>
+                <div>
+                  <label className="text-sm font-medium text-slate-700">GSTIN</label>
+                  <input value={customerForm.gstin}
+                    onChange={e => setCustomerForm(p => ({ ...p, gstin: e.target.value }))}
+                    className={`${inputClass} mt-1`} placeholder="22AAAAA0000A1Z5" />
+                </div>
               </div>
-              <div className="pt-4 flex gap-3">
-                <button 
-                  type="button" 
-                  onClick={() => setShowCustomerModal(false)}
-                  className="flex-1 px-4 py-2 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-lg cursor-pointer"
-                >
+              <div className="flex justify-end gap-3 pt-2">
+                <button type="button" onClick={() => setShowCustomerModal(false)}
+                  className="px-4 py-2 text-sm rounded-md border border-slate-200 hover:bg-slate-50 cursor-pointer">
                   Cancel
                 </button>
-                <button 
-                  type="submit" 
-                  disabled={savingCustomer}
-                  className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 disabled:opacity-50 cursor-pointer"
-                >
-                  {savingCustomer ? 'Creating...' : 'Create Customer'}
+                <button type="submit" disabled={savingCustomer}
+                  className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 cursor-pointer">
+                  {savingCustomer && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Create
                 </button>
               </div>
             </form>
@@ -650,66 +602,60 @@ export default function EditInvoicePage() {
         </div>
       )}
 
-      {/* Item Modal Implementation */}
+      {/* Item Modal */}
       {showItemModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-              <h2 className="font-bold text-slate-800">Add to Catalogue</h2>
-              <button onClick={() => setShowItemModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
-                <X className="w-5 h-5" />
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+              <h2 className="font-semibold text-slate-800">New Item</h2>
+              <button onClick={() => setShowItemModal(false)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer">
+                <X className="w-4 h-4" />
               </button>
             </div>
             <form onSubmit={handleCreateItem} className="p-6 space-y-4">
               <div>
-                <label className="text-xs font-bold text-slate-500 uppercase">Item Name *</label>
-                <input 
-                  autoFocus
-                  value={itemForm.name}
+                <label className="text-sm font-medium text-slate-700">Name *</label>
+                <input value={itemForm.name}
                   onChange={e => setItemForm(p => ({ ...p, name: e.target.value }))}
-                  className={`${inputClass} mt-1`} placeholder="e.g. Consulting Fee" 
-                />
+                  className={`${inputClass} mt-1`} placeholder="Web Design" />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium text-slate-700">Description</label>
+                <input value={itemForm.description}
+                  onChange={e => setItemForm(p => ({ ...p, description: e.target.value }))}
+                  className={`${inputClass} mt-1`} placeholder="Optional description" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-bold text-slate-500 uppercase">Unit Price *</label>
-                  <input 
-                    type="number"
-                    value={itemForm.unit_price}
+                  <label className="text-sm font-medium text-slate-700">Unit Price *</label>
+                  <input type="number" value={itemForm.unit_price} min="0" step="0.01"
                     onChange={e => setItemForm(p => ({ ...p, unit_price: e.target.value }))}
-                    className={`${inputClass} mt-1`} placeholder="0.00" 
-                  />
+                    className={`${inputClass} mt-1`} placeholder="0.00" />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-500 uppercase">Default Tax %</label>
-                  <input 
-                    type="number"
-                    value={itemForm.tax_percent}
+                  <label className="text-sm font-medium text-slate-700">Tax %</label>
+                  <input type="number" value={itemForm.tax_percent} min="0" max="99"
                     onChange={e => setItemForm(p => ({ ...p, tax_percent: e.target.value }))}
-                    className={`${inputClass} mt-1`} placeholder="0" 
-                  />
+                    className={`${inputClass} mt-1`} placeholder="0" />
                 </div>
               </div>
-              <div className="pt-4 flex gap-3">
-                <button 
-                  type="button" 
-                  onClick={() => setShowItemModal(false)}
-                  className="flex-1 px-4 py-2 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-lg cursor-pointer"
-                >
+              <div className="flex justify-end gap-3 pt-2">
+                <button type="button" onClick={() => setShowItemModal(false)}
+                  className="px-4 py-2 text-sm rounded-md border border-slate-200 hover:bg-slate-50 cursor-pointer">
                   Cancel
                 </button>
-                <button 
-                  type="submit" 
-                  disabled={savingItem}
-                  className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 disabled:opacity-50 cursor-pointer"
-                >
-                  {savingItem ? 'Saving...' : 'Add Item'}
+                <button type="submit" disabled={savingItem}
+                  className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 cursor-pointer">
+                  {savingItem && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Create
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
+
     </div>
   );
 }

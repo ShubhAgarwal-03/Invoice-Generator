@@ -61,7 +61,7 @@ export default function NewInvoicePage() {
   // Inline item modal
   const [showItemModal, setShowItemModal] = useState(false);
   const [itemForm, setItemForm] = useState({
-    name: '', description: '', unit_price: '', tax_percent: '0'
+    name: '', description: '', unit_price: '', tax_percent: '0', hsn_sac: ''
   });
   const [savingItem, setSavingItem] = useState(false);
   const [targetLineIndex, setTargetLineIndex] = useState<number | null>(null);
@@ -196,6 +196,7 @@ export default function NewInvoicePage() {
         description: itemForm.description,
         unit_price: parseFloat(itemForm.unit_price),
         tax_percent: parseFloat(itemForm.tax_percent) || 0,
+        hsn_sac: itemForm.hsn_sac.trim() || undefined,
       });
       setItems(prev => [created, ...prev]);
       if (targetLineIndex !== null) {
@@ -207,7 +208,7 @@ export default function NewInvoicePage() {
         } : l));
       }
       setShowItemModal(false);
-      setItemForm({ name: '', description: '', unit_price: '', tax_percent: '0' });
+      setItemForm({ name: '', description: '', unit_price: '', tax_percent: '0', hsn_sac: '' });
       toast.success('Item saved.');
     } catch {
       toast.error('Something went wrong. Please try again.');
@@ -602,6 +603,15 @@ export default function NewInvoicePage() {
                   <input type="number" value={itemForm.tax_percent} min="0" max="99" step="0.01"
                     onChange={e => setItemForm(p => ({ ...p, tax_percent: e.target.value }))}
                     className={`${inputClass} mt-1`} placeholder="0" />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-slate-700">HSN/SAC Code</label>
+                  <input
+                    value={itemForm.hsn_sac}
+                    onChange={e => setItemForm(p => ({ ...p, hsn_sac: e.target.value }))}
+                    className={`${inputClass} mt-1`}
+                    placeholder="e.g. 998314"
+                  />
                 </div>
               </div>
               <div className="flex justify-end gap-3 pt-2">
