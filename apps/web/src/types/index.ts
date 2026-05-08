@@ -58,6 +58,7 @@ export interface Invoice {
   tax_total: number;
   total: number;
   shipping_address?: string | null;
+  is_interstate?: boolean;
   notes?: string;
   createdAt: string;
 }

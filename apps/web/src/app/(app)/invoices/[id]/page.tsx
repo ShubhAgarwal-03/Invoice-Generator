@@ -42,7 +42,7 @@ function numberToWords(amount: number): string {
   return result.trim() + ' Only';
 }
 
-function getTaxBreakdown(items: Invoice['items'], country: string, isInterstate: boolean = true) {
+function getTaxBreakdown(items: Invoice['items'], country: string, isInterstate: boolean) {
   let totalTax = 0;
   items.forEach(item => {
     const base = item.quantity * item.unit_price;
@@ -151,7 +151,7 @@ export default function InvoiceDetailPage() {
   if (!invoice) return <div className="text-center py-20 text-slate-500">Invoice not found.</div>;
 
   const fmt = (n: number) => formatCurrency(n, invoice.customer_snapshot.currency, invoice.customer_snapshot.country);
-  const taxBreakdown = getTaxBreakdown(invoice.items, invoice.customer_snapshot.country, true);
+  const taxBreakdown = getTaxBreakdown(invoice.items, invoice.customer_snapshot.country, invoice.is_interstate ?? true);
 
   return (
     <div className="max-w-5xl">

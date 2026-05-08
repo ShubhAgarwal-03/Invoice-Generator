@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { invoicesService } from '@/services/invoices';
@@ -15,11 +15,11 @@ interface LineItem {
   quantity: string;
   unit_price: string;
   tax_percent: string;
-   hsn_sac: string; 
+  hsn_sac: string;
 }
 
 const emptyLine = (): LineItem => ({
-  description: '', quantity: '1', unit_price: '0', tax_percent: '0',hsn_sac: '',
+  description: '', quantity: '1', unit_price: '0', tax_percent: '0', hsn_sac: '',
 });
 
 const today = new Date().toISOString().split('T')[0];
@@ -41,15 +41,15 @@ export default function NewInvoicePage() {
   const [items, setItems] = useState<Item[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [customerId, setCustomerId] = useState('');
-  const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0]);
+  const [issueDate] = useState(new Date().toISOString().split('T')[0]);
   const [dueDate, setDueDate] = useState('');
   const [notes, setNotes] = useState('');
   const [lineItems, setLineItems] = useState<LineItem[]>([emptyLine()]);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-
   const [differentShipping, setDifferentShipping] = useState(false);
   const [shippingAddress, setShippingAddress] = useState('');
+  const [isInterstate, setIsInterstate] = useState(true);
 
   // Inline customer modal
   const [showCustomerModal, setShowCustomerModal] = useState(false);
@@ -72,7 +72,6 @@ export default function NewInvoicePage() {
       .catch(() => toast.error('Failed to load data'));
   }, []);
 
-  // Update selected customer when customerId changes
   useEffect(() => {
     const c = customers.find(c => c._id === customerId) ?? null;
     setSelectedCustomer(c);
@@ -109,13 +108,14 @@ export default function NewInvoicePage() {
   }
 
   function fillFromItem(index: number, itemId: string) {
-      const item = items.find(i => i._id === itemId);
+    const item = items.find(i => i._id === itemId);
     if (!item) return;
     setLineItems(prev => prev.map((l, i) => i === index ? {
       ...l,
       description: item.description ?? item.name,
       unit_price: String(item.unit_price),
       tax_percent: String(item.tax_percent),
+      hsn_sac: item.hsn_sac ?? '',
     } : l));
   }
 
@@ -123,7 +123,6 @@ export default function NewInvoicePage() {
   function validate() {
     const e: Record<string, string> = {};
     if (!customerId) e.customer = 'Please select a customer';
-    if (!issueDate) e.issueDate = 'Issue date is required';
     if (dueDate && dueDate < today) e.dueDate = 'Due date must be today or a future date';
     lineItems.forEach((l, i) => {
       if (!l.description.trim()) e[`desc_${i}`] = 'Required';
@@ -145,6 +144,7 @@ export default function NewInvoicePage() {
         issue_date: issueDate,
         due_date: dueDate || undefined,
         shipping_address: differentShipping && shippingAddress.trim() ? shippingAddress.trim() : null,
+        is_interstate: isInterstate,
         notes,
         items: lineItems.map(l => ({
           description: l.description,
@@ -252,18 +252,18 @@ export default function NewInvoicePage() {
                 </select>
                 <button type="button" onClick={() => setShowCustomerModal(true)}
                   title="New customer"
-                  className="shrink-0 p-2 border border-slate-200 rounded-md hover:bg-slate-50 text-slate-500">
+                  className="shrink-0 p-2 border border-slate-200 rounded-md hover:bg-slate-50 text-slate-500 cursor-pointer">
                   <Plus className="w-4 h-4" />
                 </button>
               </div>
               {errors.customer && <p className={errorClass}>{errors.customer}</p>}
               {selectedCustomer && (
                 <div className="mt-2 p-2 bg-slate-50 rounded text-xs text-slate-500 space-y-0.5">
-                {selectedCustomer.email && <p>{selectedCustomer.email}</p>}
-                {selectedCustomer.address && <p>{selectedCustomer.address}</p>}
-                <p className="font-medium text-slate-600">
-                Currency: <span className="text-blue-600">{selectedCustomer.currency}</span>
-                </p>
+                  {selectedCustomer.email && <p>{selectedCustomer.email}</p>}
+                  {selectedCustomer.address && <p>{selectedCustomer.address}</p>}
+                  <p className="font-medium text-slate-600">
+                    Currency: <span className="text-blue-600">{selectedCustomer.currency}</span>
+                  </p>
                 </div>
               )}
             </div>
@@ -271,25 +271,25 @@ export default function NewInvoicePage() {
             {/* Issue Date */}
             <div>
               <label className="text-sm font-medium text-slate-700">
-              Issue Date <span className="text-red-500">*</span>
+                Issue Date <span className="text-red-500">*</span>
               </label>
-              <input 
-                type="date" 
+              <input
+                type="date"
                 value={issueDate}
                 readOnly
-                className={`${inputClass} mt-1 bg-slate-50 cursor-not-allowed text-slate-500`} 
+                className={`${inputClass} mt-1 bg-slate-50 cursor-not-allowed text-slate-500`}
               />
             </div>
 
             {/* Due Date */}
             <div>
               <label className="text-sm font-medium text-slate-700">Due Date</label>
-              <input 
-                type="date" 
+              <input
+                type="date"
                 value={dueDate}
                 min={today}
                 onChange={e => setDueDate(e.target.value)}
-                className={`${inputClass} mt-1`} 
+                className={`${inputClass} mt-1`}
               />
               {errors.dueDate && <p className={errorClass}>{errors.dueDate}</p>}
             </div>
@@ -301,89 +301,104 @@ export default function NewInvoicePage() {
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-slate-700">Line Items</h2>
             <button type="button" onClick={() => { setTargetLineIndex(null); setShowItemModal(true); }}
-              className="text-xs text-blue-600 hover:underline flex items-center gap-1">
+              className="text-xs text-blue-600 hover:underline flex items-center gap-1 cursor-pointer">
               <Plus className="w-3 h-3" /> New Item
             </button>
           </div>
 
+          {/* Currency warning */}
+          {selectedCustomer && (
+            <p className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded px-3 py-2 mb-4">
+              ⚠ Prices are in <strong>{selectedCustomer.currency}</strong>. Item catalogue prices will be treated as {selectedCustomer.currency}.
+            </p>
+          )}
+
           <div className="space-y-3">
             {/* Header row */}
             <div className="hidden md:grid grid-cols-12 gap-2 text-xs font-semibold text-slate-500 uppercase tracking-wide px-1">
-            <div className="col-span-2">From Catalogue</div>
-            <div className="col-span-4">Description</div>
-            <div className="col-span-1">Qty</div>
-            <div className="col-span-2">Unit Price</div>
-            <div className="col-span-1">Tax %</div>
-            <div className="col-span-1 text-right">Total</div>
-            <div className="col-span-1"></div>
-          </div>
+              <div className="col-span-2">From Catalogue</div>
+              <div className="col-span-3">Description</div>
+              <div className="col-span-2">HSN/SAC</div>
+              <div className="col-span-1">Qty</div>
+              <div className="col-span-1">Unit Price</div>
+              <div className="col-span-1">Tax %</div>
+              <div className="col-span-1 text-right">Total</div>
+              <div className="col-span-1"></div>
+            </div>
 
-          {lineItems.map((line, i) => {
+            {lineItems.map((line, i) => {
               const { total } = calcLine(line);
-            return (
-            <div key={i} className="grid grid-cols-12 gap-2 items-start">
-            {/* From catalogue — FIRST */}
-            <div className="col-span-12 md:col-span-2">
-            <select onChange={e => fillFromItem(i, e.target.value)}
-            defaultValue=""
-            className={inputClass}>
-            <option value="">Pick item...</option>
-            {items.map(item => (
-            <option key={item._id} value={item._id}>{item.name}</option>
-            ))}
-        </select>
-      </div>
+              return (
+                <div key={i} className="grid grid-cols-12 gap-2 items-start">
 
-      {/* Description — SECOND */}
-      <div className="col-span-12 md:col-span-4">
-        <input value={line.description}
-          onChange={e => updateLine(i, 'description', e.target.value)}
-          placeholder="Description"
-          className={inputClass} />
-        {errors[`desc_${i}`] && <p className={errorClass}>{errors[`desc_${i}`]}</p>}
-      </div>
+                  {/* From catalogue */}
+                  <div className="col-span-12 md:col-span-2">
+                    <select onChange={e => fillFromItem(i, e.target.value)}
+                      defaultValue="" className={inputClass}>
+                      <option value="">Pick item...</option>
+                      {items.map(item => (
+                        <option key={item._id} value={item._id}>{item.name}</option>
+                      ))}
+                    </select>
+                  </div>
 
-      {/* Qty — whole numbers */}
-      <div className="col-span-4 md:col-span-1">
-        <input type="number" value={line.quantity} min="1" step="1"
-          onChange={e => updateLine(i, 'quantity', e.target.value)}
-          placeholder="1" className={inputClass} />
-        {errors[`qty_${i}`] && <p className={errorClass}>{errors[`qty_${i}`]}</p>}
-      </div>
+                  {/* Description */}
+                  <div className="col-span-12 md:col-span-3">
+                    <input value={line.description}
+                      onChange={e => updateLine(i, 'description', e.target.value)}
+                      placeholder="Description" className={inputClass} />
+                    {errors[`desc_${i}`] && <p className={errorClass}>{errors[`desc_${i}`]}</p>}
+                  </div>
 
-      {/* Unit Price */}
-      <div className="col-span-4 md:col-span-2">
-        <input type="number" value={line.unit_price} min="0" step="0.01"
-          onChange={e => updateLine(i, 'unit_price', e.target.value)}
-          placeholder="0.00" className={inputClass} />
-      </div>
+                  {/* HSN/SAC */}
+                  <div className="col-span-12 md:col-span-2">
+                    <input value={line.hsn_sac}
+                      onChange={e => updateLine(i, 'hsn_sac', e.target.value)}
+                      placeholder="HSN/SAC" className={inputClass} />
+                  </div>
 
-      {/* Tax % */}
-      <div className="col-span-3 md:col-span-1">
-        <input type="number" value={line.tax_percent} min="0" max="99" step="0.01"
-          onChange={e => updateLine(i, 'tax_percent', e.target.value)}
-          placeholder="0" className={inputClass} />
-        {errors[`tax_${i}`] && <p className={errorClass}>{errors[`tax_${i}`]}</p>}
-      </div>
+                  {/* Qty */}
+                  <div className="col-span-4 md:col-span-1">
+                    <input type="number" value={line.quantity} min="1" step="1"
+                      onChange={e => updateLine(i, 'quantity', e.target.value)}
+                      placeholder="1" className={inputClass} />
+                    {errors[`qty_${i}`] && <p className={errorClass}>{errors[`qty_${i}`]}</p>}
+                  </div>
 
-      {/* Line Total */}
-      <div className="col-span-1 md:col-span-1 flex items-center justify-end">
-        <span className="text-sm font-medium text-slate-700 whitespace-nowrap">
-          {fmt(subtotal)}
-        </span>
-      </div>
+                  {/* Unit Price */}
+                  <div className="col-span-4 md:col-span-1">
+                    <input type="number" value={line.unit_price} min="0" step="0.01"
+                      onChange={e => updateLine(i, 'unit_price', e.target.value)}
+                      placeholder="0.00" className={inputClass} />
+                  </div>
 
-      {/* Remove */}
-      <div className="col-span-1 flex items-center justify-center">
-        <button type="button" onClick={() => removeLine(i)}
-          disabled={lineItems.length === 1}
-          className="p-1.5 text-slate-400 hover:text-red-500 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
-          <Trash2 className="w-4 h-4" />
-        </button>
-      </div>
-    </div>
-  );
-})}
+                  {/* Tax % */}
+                  <div className="col-span-3 md:col-span-1">
+                    <input type="number" value={line.tax_percent} min="0" max="99" step="0.01"
+                      onChange={e => updateLine(i, 'tax_percent', e.target.value)}
+                      placeholder="0" className={inputClass} />
+                    {errors[`tax_${i}`] && <p className={errorClass}>{errors[`tax_${i}`]}</p>}
+                  </div>
+
+                  {/* Line Total */}
+                  <div className="col-span-1 md:col-span-1 flex items-center justify-end">
+                    <span className="text-sm font-medium text-slate-700 whitespace-nowrap">
+                      {fmt(total)}
+                    </span>
+                  </div>
+
+                  {/* Remove */}
+                  <div className="col-span-1 flex items-center justify-center">
+                    <button type="button" onClick={() => removeLine(i)}
+                      disabled={lineItems.length === 1}
+                      className="p-1.5 text-slate-400 hover:text-red-500 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                </div>
+              );
+            })}
           </div>
 
           <button type="button" onClick={addLine}
@@ -419,6 +434,53 @@ export default function NewInvoicePage() {
             className="w-full border border-slate-200 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
         </div>
 
+        {/* Shipping Address */}
+        <div className="bg-white rounded-xl border border-slate-200 p-6">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-semibold text-slate-700">Shipping Address</h2>
+            <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={differentShipping}
+                onChange={e => {
+                  setDifferentShipping(e.target.checked);
+                  if (!e.target.checked) setShippingAddress('');
+                }}
+                className="rounded border-slate-300 cursor-pointer"
+              />
+              Different from billing address
+            </label>
+          </div>
+          {differentShipping ? (
+            <input
+              value={shippingAddress}
+              onChange={e => setShippingAddress(e.target.value)}
+              placeholder="Enter shipping address..."
+              className={inputClass}
+            />
+          ) : (
+            <p className="text-sm text-slate-400 italic">
+              {selectedCustomer?.address || 'Same as billing address'}
+            </p>
+          )}
+        </div>
+
+        {/* Tax Type */}
+        <div className="bg-white rounded-xl border border-slate-200 p-6">
+          <h2 className="font-semibold text-slate-700 mb-3">Tax Type</h2>
+          <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isInterstate}
+              onChange={e => setIsInterstate(e.target.checked)}
+              className="rounded border-slate-300 cursor-pointer"
+            />
+            Interstate supply (IGST) — uncheck for intrastate (CGST + SGST)
+          </label>
+        </div>
+
+        
+
         {/* Actions */}
         <div className="flex justify-end gap-3">
           <button type="button" onClick={() => router.push('/invoices')}
@@ -431,6 +493,7 @@ export default function NewInvoicePage() {
             Create Invoice
           </button>
         </div>
+
       </form>
 
       {/* Inline Customer Modal */}
@@ -440,7 +503,9 @@ export default function NewInvoicePage() {
             <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
               <h2 className="font-semibold text-slate-800">New Customer</h2>
               <button onClick={() => setShowCustomerModal(false)}
-                className="text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
+                className="text-slate-400 hover:text-slate-600 cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
             </div>
             <form onSubmit={handleCreateCustomer} className="p-6 space-y-4">
               <div>
@@ -464,46 +529,32 @@ export default function NewInvoicePage() {
                 </div>
               </div>
               <div>
-                <label className="text-sm font-medium text-slate-700">Country *</label>
-                <select value={customerForm.country}
-                  onChange={e => setCustomerForm(p => ({ ...p, country: e.target.value }))}
-                  className={`${inputClass} mt-1`}>
-                  {COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
-                </select>
+                <label className="text-sm font-medium text-slate-700">Address</label>
+                <input value={customerForm.address}
+                  onChange={e => setCustomerForm(p => ({ ...p, address: e.target.value }))}
+                  className={`${inputClass} mt-1`} placeholder="123 Main St, City" />
               </div>
-              {/* Shipping Address */}
-<div className="bg-white rounded-xl border border-slate-200 p-6">
-  <div className="flex items-center justify-between mb-3">
-    <h2 className="font-semibold text-slate-700">Shipping Address</h2>
-    <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
-      <input
-        type="checkbox"
-        checked={differentShipping}
-        onChange={e => {
-          setDifferentShipping(e.target.checked);
-          if (!e.target.checked) setShippingAddress('');
-        }}
-        className="rounded border-slate-300 cursor-pointer"
-      />
-      Different from billing address
-    </label>
-  </div>
-  {differentShipping ? (
-    <input
-      value={shippingAddress}
-      onChange={e => setShippingAddress(e.target.value)}
-      placeholder="Enter shipping address..."
-      className="w-full border border-slate-200 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-    />
-  ) : (
-    <p className="text-sm text-slate-400 italic">
-      {selectedCustomer?.address || 'Same as billing address'}
-    </p>
-  )}
-</div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-sm font-medium text-slate-700">Country *</label>
+                  <select value={customerForm.country}
+                    onChange={e => setCustomerForm(p => ({ ...p, country: e.target.value }))}
+                    className={`${inputClass} mt-1`}>
+                    {COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-slate-700">GSTIN</label>
+                  <input value={customerForm.gstin}
+                    onChange={e => setCustomerForm(p => ({ ...p, gstin: e.target.value }))}
+                    className={`${inputClass} mt-1`} placeholder="22AAAAA0000A1Z5" />
+                </div>
+              </div>
               <div className="flex justify-end gap-3 pt-2">
                 <button type="button" onClick={() => setShowCustomerModal(false)}
-                  className="px-4 py-2 text-sm rounded-md border border-slate-200 hover:bg-slate-50 cursor-pointer">Cancel</button>
+                  className="px-4 py-2 text-sm rounded-md border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                  Cancel
+                </button>
                 <button type="submit" disabled={savingCustomer}
                   className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 cursor-pointer">
                   {savingCustomer && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -522,7 +573,9 @@ export default function NewInvoicePage() {
             <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
               <h2 className="font-semibold text-slate-800">New Item</h2>
               <button onClick={() => setShowItemModal(false)}
-                className="text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
+                className="text-slate-400 hover:text-slate-600 cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
             </div>
             <form onSubmit={handleCreateItem} className="p-6 space-y-4">
               <div>
@@ -553,7 +606,9 @@ export default function NewInvoicePage() {
               </div>
               <div className="flex justify-end gap-3 pt-2">
                 <button type="button" onClick={() => setShowItemModal(false)}
-                  className="px-4 py-2 text-sm rounded-md border border-slate-200 hover:bg-slate-50 cursor-pointer">Cancel</button>
+                  className="px-4 py-2 text-sm rounded-md border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                  Cancel
+                </button>
                 <button type="submit" disabled={savingItem}
                   className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 cursor-pointer">
                   {savingItem && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -564,6 +619,7 @@ export default function NewInvoicePage() {
           </div>
         </div>
       )}
+
     </div>
   );
 }

@@ -39,6 +39,7 @@ export interface IInvoice extends Document {
   total: number;
   notes?: string;
   shipping_address?: string | null;
+  is_interstate: boolean;
   is_deleted: boolean;
   deletedAt?: Date;
   createdAt: Date;
@@ -81,6 +82,7 @@ const InvoiceSchema = new Schema<IInvoice>(
     total: { type: Number, required: true },
     notes: { type: String },
     shipping_address: { type: String, default: null },
+    is_interstate: { type: Boolean, default: true },
     is_deleted: { type: Boolean, default: false },
     deletedAt: { type: Date },
   },

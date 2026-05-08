@@ -74,6 +74,8 @@ export default function EditInvoicePage() {
   const [differentShipping, setDifferentShipping] = useState(false);
   const [shippingAddress, setShippingAddress] = useState('');
 
+  const [isInterstate, setIsInterstate] = useState(true);
+
   useEffect(() => {
     let isMounted = true;
     
@@ -101,6 +103,7 @@ export default function EditInvoicePage() {
           setDifferentShipping(true);
           setShippingAddress(inv.shipping_address);
         }
+        setIsInterstate(inv.is_interstate ?? true);
         setLineItems(inv.items.map(l => ({
           description: l.description,
           quantity: String(l.quantity),
@@ -201,6 +204,7 @@ export default function EditInvoicePage() {
         status,
         shipping_address: differentShipping && shippingAddress.trim() ? shippingAddress.trim() : null,
         notes: notes.trim(),
+        is_interstate: isInterstate,
         items: lineItems.map(l => ({
           description: l.description.trim(),
           quantity: Number(l.quantity),
@@ -402,6 +406,20 @@ export default function EditInvoicePage() {
         )}
         </div>
 
+        
+        <div className="bg-white rounded-xl border border-slate-200 p-6">
+          <h2 className="font-semibold text-slate-700 mb-3">Tax Type</h2>
+          <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isInterstate}
+              onChange={e => setIsInterstate(e.target.checked)}
+              className="rounded border-slate-300 cursor-pointer"
+            />
+          Interstate supply (IGST) — uncheck for intrastate (CGST + SGST)
+          </label>
+        </div>
+
         {/* Line Items Section */}
         <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
           <div className="flex items-center justify-between mb-6">
@@ -423,7 +441,7 @@ export default function EditInvoicePage() {
               <div className="col-span-1">Qty</div>
               <div className="col-span-2">Price</div>
               <div className="col-span-1">Tax %</div>
-              <div className="w-28 text-xs font-semibold text-slate-500">HSN/SAC</div>
+              <div className="col-span-2 text-xs font-bold text-slate-400 uppercase tracking-wider">HSN/SAC</div>
               <div className="col-span-1 text-right">Total</div>
               <div className="col-span-1"></div>
             </div>
@@ -455,14 +473,14 @@ export default function EditInvoicePage() {
                   </div>
 
                   {/* HSN/SAC */}
-                <div className="w-28">
-                  <input
-                    value={line.hsn_sac}
-                    onChange={e => updateLine(i, 'hsn_sac', e.target.value)}
-                    placeholder="HSN/SAC"
-                    className="w-full border border-slate-200 rounded-md px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
+                  <div className="col-span-12 md:col-span-2">
+                    <input
+                      value={line.hsn_sac}
+                      onChange={e => updateLine(i, 'hsn_sac', e.target.value)}
+                      placeholder="HSN/SAC"
+                      className={inputClass}
+                    />
+                  </div>
 
                   <div className="col-span-4 md:col-span-1">
                     <input 

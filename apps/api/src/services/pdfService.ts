@@ -179,7 +179,7 @@ export async function generateInvoicePdf(invoice: any, company: any): Promise<Bu
     const totY = rowY + 16;
 
     // Tax breakdown box
-    const isInterstate = true; // Default to IGST; update to use invoice field when available
+    const isInterstate = invoice.is_interstate ?? true;
     doc.rect(40, totY, PAGE_WIDTH / 2, 60).fill('#f8fafc');
     doc.fontSize(7).font('Helvetica-Bold').fillColor('#94a3b8')
       .text('TAX BREAKDOWN', 48, totY + 8);

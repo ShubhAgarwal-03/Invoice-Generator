@@ -88,7 +88,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 router.post('/', async (req: Request, res: Response) => {
   try {
     
-    const { customer_id, issue_date, due_date, items, notes, shipping_address } = req.body;
+    const { customer_id, issue_date, due_date, items, notes, shipping_address, is_interstate } = req.body;
 
     if (!customer_id || !items?.length) {
       return res.status(400).json({ error: 'Customer ID and items are required' });
@@ -129,6 +129,7 @@ router.post('/', async (req: Request, res: Response) => {
       shipping_address: shipping_address ?? null,
       due_date: due_date ?? null,
       items: processedItems,
+      is_interstate: is_interstate ?? true,
       subtotal,
       tax_total,
       total,
@@ -144,7 +145,7 @@ router.post('/', async (req: Request, res: Response) => {
 // UPDATE
 router.put('/:id', async (req: Request, res: Response) => {
   try {
-    const { customer_id, items, due_date, issue_date, notes, status, shipping_address } = req.body;
+    const { customer_id, items, due_date, issue_date, notes, status, shipping_address, is_interstate } = req.body;
 
     // 1. Validation
     if (due_date && new Date(due_date) < new Date(new Date().setHours(0,0,0,0))) {
@@ -179,6 +180,7 @@ router.put('/:id', async (req: Request, res: Response) => {
         notes,
         status,
         shipping_address: shipping_address ?? null,
+        is_interstate: is_interstate ?? true,
       },
       { new: true }
     );
