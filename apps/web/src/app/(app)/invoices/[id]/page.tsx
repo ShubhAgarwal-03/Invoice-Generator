@@ -120,24 +120,60 @@ export default function InvoiceDetailPage() {
 
   async function handleDownloadPdf() {
     setDownloadingPdf(true);
-    toast.info('Preparing your PDF…');
+    // Use the existing toast library to provide immediate feedback
+    const toastId = toast.info('Preparing your PDF... this may take a moment.');
+
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3333';
+      
       const res = await fetch(`${apiUrl}/api/invoices/${id}/pdf`, {
-        signal: AbortSignal.timeout(90000), // 90 second timeout for Render cold start
+        method: 'GET',
+        headers: {
+          'Accept': 'application/pdf',
+        },
+        // Render free tier can take up to 50 seconds to boot; 90s provides a safety margin
+        signal: AbortSignal.timeout(90000), 
       });
-      if (!res.ok) throw new Error('PDF generation failed');
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error('PDF Generation Error:', errorText);
+        throw new Error(`Server returned ${res.status}`);
+      }
+
       const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
+      
+      // Ensure we actually received a PDF and not an HTML error page
+      if (blob.type !== 'application/pdf') {
+        throw new Error('Invalid file format received');
+      }
+
+      const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
+      a.style.display = 'none';
       a.href = url;
-      a.download = `${invoice?.invoice_number}.pdf`;
+      // Uses the invoice number from your state for the filename
+      a.download = `${invoice?.invoice_number || 'invoice'}.pdf`; 
+      
       document.body.appendChild(a);
       a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch {
-      toast.error('Something went wrong. Please try again.');
+      
+      // Cleanup to prevent memory leaks
+      setTimeout(() => {
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      }, 100);
+
+      toast.success('Download started!', { id: toastId });
+    } catch (err: any) {
+      console.error('Download Error:', err);
+      const isTimeout = err.name === 'TimeoutError';
+      toast.error(
+        isTimeout 
+          ? 'The server is taking too long to wake up. Please try again in 10 seconds.' 
+          : 'Failed to generate PDF. Please check your connection.',
+        { id: toastId }
+      );
     } finally {
       setDownloadingPdf(false);
     }
@@ -205,13 +241,32 @@ export default function InvoiceDetailPage() {
 
           {/* Header */}
           <div className="flex justify-between items-start">
-            {/* Company */}
+          {/* Company */}
             <div className="space-y-1">
-              {company?.logo_url && (
-                <img src={company.logo_url} alt="Logo" className="h-14 mb-3 object-contain" />
+            {company?.logo_url ? (
+            <img src={company.logo_url} alt="Logo" className="h-14 mb-3 object-contain" />
+              ) : (
+              /* Professional Placeholder Logo */
+              <div className="h-14 w-14 mb-3 bg-blue-600 rounded-lg flex items-center justify-center shadow-sm">
+                <svg 
+                  xmlns="http://www.w3.org/2000/svg" 
+                  viewBox="0 0 24 24" 
+                  fill="none" 
+                  stroke="white" 
+                  strokeWidth="2.5" 
+                  strokeLinecap="round" 
+                  strokeLinejoin="round" 
+                  className="w-8 h-8"
+                >
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                <line x1="3" y1="9" x2="21" y2="9" />
+               <line x1="9" y1="21" x2="9" y2="9" />
+                </svg>
+              </div>
               )}
               <h2 className="text-xl font-bold text-slate-800">{company?.name || 'Your Company'}</h2>
               {company?.address && <p className="text-sm text-slate-500">{company.address}</p>}
+
               {company?.email && <p className="text-sm text-slate-500">{company.email}</p>}
               {company?.phone && <p className="text-sm text-slate-500">{company.phone}</p>}
               {company?.gstin && (
@@ -225,6 +280,8 @@ export default function InvoiceDetailPage() {
                 </p>
               )}
             </div>
+
+            
 
             {/* Invoice meta */}
             <div className="text-right space-y-2">
