@@ -239,28 +239,33 @@ export default function InvoiceDetailPage() {
 
         <div className="p-8 space-y-8">
 
+          
           {/* Header */}
-          <div className="flex justify-between items-start">
-          {/* Company */}
-            <div className="space-y-1">
-            {company?.logo_url ? (
-            <img src={company.logo_url} alt="Logo" className="h-14 mb-3 object-contain" />
-              ) : (
-              /* Professional Placeholder Logo */
-              <div className="h-14 w-14 mb-3 bg-blue-600 rounded-lg flex items-center justify-center shadow-sm">
-                <svg 
-                  xmlns="http://www.w3.org/2000/svg" 
-                  viewBox="0 0 24 24" 
-                  fill="none" 
-                  stroke="white" 
-                  strokeWidth="2.5" 
-                  strokeLinecap="round" 
-                  strokeLinejoin="round" 
-                  className="w-8 h-8"
-                >
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                <line x1="3" y1="9" x2="21" y2="9" />
-               <line x1="9" y1="21" x2="9" y2="9" />
+        <div className="flex justify-between items-start">
+        {/* Company */}
+        <div className="space-y-1">
+        {company?.logo_url ? (
+        <img 
+          src={company.logo_url} 
+          alt="Logo" 
+          className="h-14 mb-3 object-contain" 
+        />
+        ) : (
+        /* Professional Geometric Placeholder */
+          <div className="h-14 w-14 mb-3 bg-blue-600 rounded-lg flex items-center justify-center shadow-md">
+            <svg 
+              xmlns="http://www.w3.org/2000/svg" 
+              viewBox="0 0 24 24" 
+              fill="none" 
+              stroke="white" 
+              strokeWidth="2.5" 
+              strokeLinecap="round" 
+              strokeLinejoin="round" 
+              className="w-8 h-8"
+              >
+                <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                <path d="M2 17l10 5 10-5" />
+                <path d="M2 12l10 5 10-5" />
                 </svg>
               </div>
               )}
