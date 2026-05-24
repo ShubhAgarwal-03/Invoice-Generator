@@ -29,6 +29,12 @@ const CURRENCIES = [
   { code: 'BRL', symbol: 'R$', name: 'Brazilian Real' },
 ];
 
+const COUNTRY_CURRENCY: Record<string, string> = {
+  IN: 'INR', US: 'USD', GB: 'GBP', DE: 'EUR', FR: 'EUR',
+  AU: 'AUD', CA: 'CAD', JP: 'JPY', SG: 'SGD', AE: 'AED',
+  BR: 'BRL', ZA: 'ZAR', NG: 'NGN', KE: 'KES',
+};
+
 const emptyForm: Omit<Customer, '_id' | 'createdAt'> = {
   customer_code: '',
   customer_type: 'business',
@@ -58,6 +64,7 @@ export default function CustomersPage() {
   const [saving, setSaving] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [currencyManuallySet, setCurrencyManuallySet] = useState(false);
 
   useEffect(() => { fetchCustomers(); }, []);
 
@@ -76,6 +83,7 @@ export default function CustomersPage() {
     setForm(emptyForm);
     setEditingId(null);
     setErrors({});
+    setCurrencyManuallySet(false);
     setShowModal(true);
   }
 
@@ -101,6 +109,7 @@ export default function CustomersPage() {
     });
     setEditingId(c._id);
     setErrors({});
+    setCurrencyManuallySet(true); // existing record — respect saved currency
     setShowModal(true);
   }
 
@@ -150,7 +159,23 @@ export default function CustomersPage() {
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     const { name, value } = e.target;
-    setForm(prev => ({ ...prev, [name]: value }));
+
+    if (name === 'currency') {
+      // User explicitly picked a currency — lock it, never auto-override
+      setCurrencyManuallySet(true);
+      setForm(prev => ({ ...prev, currency: value }));
+    } else if (name === 'country') {
+      // Auto-derive currency from country only if user hasn't manually set one
+      const derived = COUNTRY_CURRENCY[value];
+      setForm(prev => ({
+        ...prev,
+        country: value,
+        ...((!currencyManuallySet && derived) ? { currency: derived } : {}),
+      }));
+    } else {
+      setForm(prev => ({ ...prev, [name]: value }));
+    }
+
     if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
   }
 
