@@ -8,7 +8,7 @@ import { customersService } from '@/services/customers';
 import { itemsService } from '@/services/items';
 import { Customer, Item, Tax } from '@/types';
 import { formatCurrency } from '@/utils/currency';
-import { Loader2, Plus, Trash2, X, GripVertical, UserPlus } from 'lucide-react';
+import { Loader2, Plus, Trash2, X, GripVertical, UserPlus, Users } from 'lucide-react';
 
 const emptyLine = () => ({
   description: '', 
@@ -67,6 +67,8 @@ export default function NewInvoicePage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const [showCustomerModal, setShowCustomerModal] = useState(false);
+  const [customerModalStep, setCustomerModalStep] = useState<'choice' | 'new' | 'existing'>('choice');
+  const [existingCustomerId, setExistingCustomerId] = useState('');
   const [customerForm, setCustomerForm] = useState({
     customer_code: '', customer_type: 'business', customer_name: '', company_name: '',
     email: '', phone: '', billing_address_1: '', billing_address_2: '', city: '', state: '', postal_code: '',
@@ -261,7 +263,7 @@ export default function NewInvoicePage() {
           <div className="w-72">
             {!selectedCustomer ? (
               <div 
-                onClick={() => setShowCustomerModal(true)}
+                onClick={() => { setCustomerModalStep('choice'); setExistingCustomerId(''); setShowCustomerModal(true); }}
                 className="border-2 border-dashed border-slate-300 rounded-xl p-8 flex flex-col items-center justify-center text-blue-600 hover:bg-blue-50/50 cursor-pointer h-48 transition-colors"
               >
                 <div className="relative mb-2">
@@ -546,98 +548,212 @@ export default function NewInvoicePage() {
       {showCustomerModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl my-8">
-            <div className="flex items-center justify-between p-6 border-b border-slate-100">
-              <h2 className="text-xl font-bold text-slate-800">Add a customer</h2>
-              <button onClick={() => setShowCustomerModal(false)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5"/></button>
-            </div>
-            <form onSubmit={handleCreateCustomer} className="p-6 space-y-6">
-               <div className="grid grid-cols-2 gap-4">
-                 <div>
-                   <label className="text-xs font-bold text-slate-600 uppercase">Customer Type</label>
-                   <select value={customerForm.customer_type} onChange={e => setCustomerForm(p => ({...p, customer_type: e.target.value}))} className={`${inputClass} mt-1`}>
-                     <option value="business">Business</option>
-                     <option value="individual">Individual</option>
-                   </select>
-                 </div>
-                 <div>
-                   <label className="text-xs font-bold text-slate-600 uppercase">Customer Code</label>
-                   <input value={customerForm.customer_code} onChange={e => setCustomerForm(p => ({...p, customer_code: e.target.value}))} className={`${inputClass} mt-1`} />
-                 </div>
-                 <div>
-                   <label className="text-xs font-bold text-slate-600 uppercase">Contact Name *</label>
-                   <input value={customerForm.customer_name} onChange={e => setCustomerForm(p => ({...p, customer_name: e.target.value}))} className={`${inputClass} mt-1`} required />
-                 </div>
-                 <div>
-                   <label className="text-xs font-bold text-slate-600 uppercase">Company Name</label>
-                   <input value={customerForm.company_name} onChange={e => setCustomerForm(p => ({...p, company_name: e.target.value}))} className={`${inputClass} mt-1`} />
-                 </div>
-                 <div>
-                   <label className="text-xs font-bold text-slate-600 uppercase">Email</label>
-                   <input value={customerForm.email} onChange={e => setCustomerForm(p => ({...p, email: e.target.value}))} className={`${inputClass} mt-1`} />
-                 </div>
-                 <div>
-                   <label className="text-xs font-bold text-slate-600 uppercase">Phone</label>
-                   <input value={customerForm.phone} onChange={e => setCustomerForm(p => ({...p, phone: e.target.value}))} className={`${inputClass} mt-1`} />
-                 </div>
-                 <div>
-                   <label className="text-xs font-bold text-slate-600 uppercase">Currency</label>
-                   <select value={customerForm.currency} onChange={e => setCustomerForm(p => ({...p, currency: e.target.value}))} className={`${inputClass} mt-1`}>
-                     {CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.code} ({c.symbol}) — {c.name}</option>)}
-                   </select>
-                 </div>
-               </div>
-               
-               <div className="border-t border-slate-100 pt-6">
-                 <h3 className="font-bold text-slate-700 mb-4">Billing Address</h3>
-                 <div className="grid grid-cols-2 gap-4">
-                   <div className="col-span-2">
-                     <input value={customerForm.billing_address_1} onChange={e => setCustomerForm(p => ({...p, billing_address_1: e.target.value}))} placeholder="Address Line 1" className={inputClass} />
-                   </div>
-                   <div className="col-span-2">
-                     <input value={customerForm.billing_address_2} onChange={e => setCustomerForm(p => ({...p, billing_address_2: e.target.value}))} placeholder="Address Line 2" className={inputClass} />
-                   </div>
-                   <div>
-                     <input value={customerForm.city} onChange={e => setCustomerForm(p => ({...p, city: e.target.value}))} placeholder="City" className={inputClass} />
-                   </div>
-                   <div>
-                     <input value={customerForm.state} onChange={e => setCustomerForm(p => ({...p, state: e.target.value}))} placeholder="State" className={inputClass} />
-                   </div>
-                   <div>
-                     <input value={customerForm.postal_code} onChange={e => setCustomerForm(p => ({...p, postal_code: e.target.value}))} placeholder="Postal Code" className={inputClass} />
-                   </div>
-                   <div>
-                     <select value={customerForm.country} onChange={e => setCustomerForm(p => ({...p, country: e.target.value}))} className={inputClass}>
-                       {COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
-                     </select>
-                   </div>
-                 </div>
-               </div>
 
-               <div className="border-t border-slate-100 pt-6">
-                 <h3 className="font-bold text-slate-700 mb-4">Tax Details</h3>
-                 <div className="grid grid-cols-2 gap-4">
-                   <div>
-                     <label className="text-xs font-bold text-slate-600 uppercase">GSTIN / Tax ID</label>
-                     <input value={customerForm.gstin} onChange={e => setCustomerForm(p => ({...p, gstin: e.target.value}))} className={`${inputClass} mt-1`} />
-                   </div>
-                   <div>
-                     <label className="text-xs font-bold text-slate-600 uppercase">PAN</label>
-                     <input value={customerForm.pan} onChange={e => setCustomerForm(p => ({...p, pan: e.target.value}))} className={`${inputClass} mt-1`} />
-                   </div>
-                   <div>
-                     <label className="text-xs font-bold text-slate-600 uppercase">Registration No.</label>
-                     <input value={customerForm.registration_number} onChange={e => setCustomerForm(p => ({...p, registration_number: e.target.value}))} className={`${inputClass} mt-1`} />
-                   </div>
-                 </div>
-               </div>
-               
-               <div className="flex justify-end gap-3 pt-4">
-                 <button type="button" onClick={() => setShowCustomerModal(false)} className="px-4 py-2 font-medium text-slate-600 hover:bg-slate-50 rounded">Cancel</button>
-                 <button type="submit" disabled={savingCustomer} className="px-6 py-2 bg-blue-600 text-white font-bold rounded hover:bg-blue-700 flex items-center gap-2">
-                   {savingCustomer && <Loader2 className="w-4 h-4 animate-spin"/>} Save
-                 </button>
-               </div>
-            </form>
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                {customerModalStep !== 'choice' && (
+                  <button
+                    type="button"
+                    onClick={() => setCustomerModalStep('choice')}
+                    className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
+                )}
+                <h2 className="text-xl font-bold text-slate-800">
+                  {customerModalStep === 'choice' && 'Add a customer'}
+                  {customerModalStep === 'new' && 'New customer'}
+                  {customerModalStep === 'existing' && 'Choose existing customer'}
+                </h2>
+              </div>
+              <button onClick={() => setShowCustomerModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer"><X className="w-5 h-5"/></button>
+            </div>
+
+            {/* Step: Choice */}
+            {customerModalStep === 'choice' && (
+              <div className="p-8 grid grid-cols-2 gap-5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCustomerForm({ customer_code: '', customer_type: 'business', customer_name: '', company_name: '', email: '', phone: '', billing_address_1: '', billing_address_2: '', city: '', state: '', postal_code: '', country: 'IN', currency: 'INR', gstin: '', pan: '', registration_number: '' });
+                    setCustomerModalStep('new');
+                  }}
+                  className="group flex flex-col items-center justify-center gap-4 rounded-xl border-2 border-slate-200 hover:border-blue-500 hover:bg-blue-50/40 p-10 transition-all cursor-pointer text-center"
+                >
+                  <div className="w-14 h-14 rounded-full bg-blue-100 group-hover:bg-blue-200 flex items-center justify-center transition-colors">
+                    <UserPlus className="w-7 h-7 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-slate-800 text-base">New customer</p>
+                    <p className="text-sm text-slate-500 mt-1">Create and add a brand new customer</p>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setExistingCustomerId(''); setCustomerModalStep('existing'); }}
+                  className="group flex flex-col items-center justify-center gap-4 rounded-xl border-2 border-slate-200 hover:border-blue-500 hover:bg-blue-50/40 p-10 transition-all cursor-pointer text-center"
+                >
+                  <div className="w-14 h-14 rounded-full bg-slate-100 group-hover:bg-blue-200 flex items-center justify-center transition-colors">
+                    <Users className="w-7 h-7 text-slate-500 group-hover:text-blue-600 transition-colors" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-slate-800 text-base">Existing customer</p>
+                    <p className="text-sm text-slate-500 mt-1">Pick from your saved customers</p>
+                  </div>
+                </button>
+              </div>
+            )}
+
+            {/* Step: Choose existing */}
+            {customerModalStep === 'existing' && (
+              <div className="p-6 space-y-6">
+                <div>
+                  <label className="text-xs font-bold text-slate-600 uppercase">Select customer</label>
+                  <select
+                    value={existingCustomerId}
+                    onChange={e => setExistingCustomerId(e.target.value)}
+                    className={`${inputClass} mt-2`}
+                  >
+                    <option value="">— choose a customer —</option>
+                    {customers.map(c => (
+                      <option key={c._id} value={c._id}>
+                        {c.customer_name}{c.company_name ? ` — ${c.company_name}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Preview selected customer details */}
+                {existingCustomerId && (() => {
+                  const c = customers.find(x => x._id === existingCustomerId);
+                  if (!c) return null;
+                  return (
+                    <div className="bg-slate-50 rounded-lg border border-slate-200 p-4 space-y-1 text-sm text-slate-600">
+                      {c.company_name && <p className="font-semibold text-slate-800">{c.company_name}</p>}
+                      {c.email && <p>{c.email}</p>}
+                      {c.phone && <p>{c.phone}</p>}
+                      {c.billing_address_1 && <p>{c.billing_address_1}{c.city ? `, ${c.city}` : ''}</p>}
+                      <p className="text-xs text-slate-400 pt-1">{c.currency} · {c.country}{c.gstin ? ` · GSTIN: ${c.gstin}` : ''}</p>
+                    </div>
+                  );
+                })()}
+
+                <div className="flex justify-end gap-3 pt-2">
+                  <button type="button" onClick={() => setShowCustomerModal(false)} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 rounded-md border border-slate-200 cursor-pointer">Cancel</button>
+                  <button
+                    type="button"
+                    disabled={!existingCustomerId}
+                    onClick={() => {
+                      const c = customers.find(x => x._id === existingCustomerId);
+                      if (c) {
+                        setSelectedCustomer(c);
+                        setCustomerId(c._id);
+                        setShowCustomerModal(false);
+                      }
+                    }}
+                    className="px-6 py-2 bg-blue-600 text-white text-sm font-bold rounded-md hover:bg-blue-700 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Select customer
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Step: New customer form */}
+            {customerModalStep === 'new' && (
+              <form onSubmit={handleCreateCustomer} className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold text-slate-600 uppercase">Customer Type</label>
+                    <select value={customerForm.customer_type} onChange={e => setCustomerForm(p => ({...p, customer_type: e.target.value}))} className={`${inputClass} mt-1`}>
+                      <option value="business">Business</option>
+                      <option value="individual">Individual</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-600 uppercase">Customer Code</label>
+                    <input value={customerForm.customer_code} onChange={e => setCustomerForm(p => ({...p, customer_code: e.target.value}))} placeholder="e.g. CUST-001" className={`${inputClass} mt-1`} />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-600 uppercase">Contact Name *</label>
+                    <input value={customerForm.customer_name} onChange={e => setCustomerForm(p => ({...p, customer_name: e.target.value}))} className={`${inputClass} mt-1`} required />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-600 uppercase">Company Name</label>
+                    <input value={customerForm.company_name} onChange={e => setCustomerForm(p => ({...p, company_name: e.target.value}))} className={`${inputClass} mt-1`} />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-600 uppercase">Email</label>
+                    <input type="email" value={customerForm.email} onChange={e => setCustomerForm(p => ({...p, email: e.target.value}))} className={`${inputClass} mt-1`} />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-600 uppercase">Phone</label>
+                    <input value={customerForm.phone} onChange={e => setCustomerForm(p => ({...p, phone: e.target.value}))} className={`${inputClass} mt-1`} />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-600 uppercase">Currency</label>
+                    <select value={customerForm.currency} onChange={e => setCustomerForm(p => ({...p, currency: e.target.value}))} className={`${inputClass} mt-1`}>
+                      {CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.code} ({c.symbol}) — {c.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-100 pt-5">
+                  <h3 className="font-bold text-slate-700 mb-4">Billing Address</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="col-span-2">
+                      <input value={customerForm.billing_address_1} onChange={e => setCustomerForm(p => ({...p, billing_address_1: e.target.value}))} placeholder="Address Line 1" className={inputClass} />
+                    </div>
+                    <div className="col-span-2">
+                      <input value={customerForm.billing_address_2} onChange={e => setCustomerForm(p => ({...p, billing_address_2: e.target.value}))} placeholder="Address Line 2" className={inputClass} />
+                    </div>
+                    <div>
+                      <input value={customerForm.city} onChange={e => setCustomerForm(p => ({...p, city: e.target.value}))} placeholder="City" className={inputClass} />
+                    </div>
+                    <div>
+                      <input value={customerForm.state} onChange={e => setCustomerForm(p => ({...p, state: e.target.value}))} placeholder="State / Province" className={inputClass} />
+                    </div>
+                    <div>
+                      <input value={customerForm.postal_code} onChange={e => setCustomerForm(p => ({...p, postal_code: e.target.value}))} placeholder="Postal Code" className={inputClass} />
+                    </div>
+                    <div>
+                      <select value={customerForm.country} onChange={e => setCustomerForm(p => ({...p, country: e.target.value}))} className={inputClass}>
+                        {COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-100 pt-5">
+                  <h3 className="font-bold text-slate-700 mb-4">Tax Details</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-bold text-slate-600 uppercase">GSTIN / Tax ID</label>
+                      <input value={customerForm.gstin} onChange={e => setCustomerForm(p => ({...p, gstin: e.target.value}))} className={`${inputClass} mt-1`} />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-600 uppercase">PAN</label>
+                      <input value={customerForm.pan} onChange={e => setCustomerForm(p => ({...p, pan: e.target.value}))} className={`${inputClass} mt-1`} />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-600 uppercase">Registration No.</label>
+                      <input value={customerForm.registration_number} onChange={e => setCustomerForm(p => ({...p, registration_number: e.target.value}))} className={`${inputClass} mt-1`} />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-3 pt-2">
+                  <button type="button" onClick={() => setShowCustomerModal(false)} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 rounded-md border border-slate-200 cursor-pointer">Cancel</button>
+                  <button type="submit" disabled={savingCustomer} className="px-6 py-2 bg-blue-600 text-white text-sm font-bold rounded-md hover:bg-blue-700 flex items-center gap-2 cursor-pointer disabled:opacity-60">
+                    {savingCustomer && <Loader2 className="w-4 h-4 animate-spin"/>} Save
+                  </button>
+                </div>
+              </form>
+            )}
+
           </div>
         </div>
       )}
