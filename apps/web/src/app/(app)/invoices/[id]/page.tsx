@@ -10,7 +10,7 @@ import { formatDate } from '@/utils/date';
 import { formatCurrency } from '@/utils/currency';
 import { Loader2, Pencil, Download, Copy, Trash2, ArrowLeft } from 'lucide-react';
 
-const STATUS_BADGE: Record<string, string> = {
+const STATUS_BADGE: Record<InvoiceStatus, string> = {
   draft: 'bg-slate-100 text-slate-600',
   sent: 'bg-blue-100 text-blue-700',
   paid: 'bg-green-100 text-green-700',
@@ -20,41 +20,41 @@ function numberToWords(amount: number): string {
   const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
     'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
   const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
-
   function convertHundreds(n: number): string {
     if (n === 0) return '';
     if (n < 20) return ones[n] + ' ';
     if (n < 100) return tens[Math.floor(n / 10)] + (n % 10 ? ' ' + ones[n % 10] : '') + ' ';
     return ones[Math.floor(n / 100)] + ' Hundred ' + convertHundreds(n % 100);
   }
-
   if (amount === 0) return 'Zero';
   const intPart = Math.floor(amount);
   const decPart = Math.round((amount - intPart) * 100);
-
   let result = '';
-  if (intPart >= 10000000) { result += convertHundreds(Math.floor(intPart / 10000000)) + 'Crore '; }
-  if (intPart >= 100000) { result += convertHundreds(Math.floor((intPart % 10000000) / 100000)) + 'Lakh '; }
-  if (intPart >= 1000) { result += convertHundreds(Math.floor((intPart % 100000) / 1000)) + 'Thousand '; }
+  if (intPart >= 10000000) result += convertHundreds(Math.floor(intPart / 10000000)) + 'Crore ';
+  if (intPart >= 100000) result += convertHundreds(Math.floor((intPart % 10000000) / 100000)) + 'Lakh ';
+  if (intPart >= 1000) result += convertHundreds(Math.floor((intPart % 100000) / 1000)) + 'Thousand ';
   result += convertHundreds(intPart % 1000);
   if (decPart > 0) result += 'and ' + convertHundreds(decPart) + 'Paise';
-
   return result.trim() + ' Only';
 }
 
-function getTaxBreakdown(items: Invoice['items'], country: string, isInterstate: boolean) {
-  let totalTax = 0;
+// Build tax breakdown from the structured taxes array on each line item
+function getTaxBreakdown(items: Invoice['items']) {
+  const breakdown: Record<string, { name: string; amount: number }> = {};
   items.forEach(item => {
     const base = item.quantity * item.unit_price;
-    totalTax += base * (item.tax_percent / 100);
+    item.taxes.forEach(t => {
+      const key = t.tax_id ?? t.name;
+      if (!breakdown[key]) breakdown[key] = { name: `${t.name} (${t.percent}%)`, amount: 0 };
+      breakdown[key].amount += base * (t.percent / 100);
+    });
   });
+  return Object.values(breakdown);
+}
 
-  // For Indian invoices: IGST for interstate, CGST+SGST for intrastate
-  // Default to IGST (interstate) — can be made configurable via invoice field later
-  if (country === 'IN' && !isInterstate) {
-    return { igst: 0, cgst: totalTax / 2, sgst: totalTax / 2 };
-  }
-  return { igst: totalTax, cgst: 0, sgst: 0 };
+// Helper: customer display name from snapshot
+function snapshotDisplayName(snap: Invoice['customer_snapshot']): string {
+  return snap.customer_name ?? (snap as any).name ?? '';
 }
 
 export default function InvoiceDetailPage() {
@@ -120,57 +120,31 @@ export default function InvoiceDetailPage() {
 
   async function handleDownloadPdf() {
     setDownloadingPdf(true);
-    // Use the existing toast library to provide immediate feedback
-    const toastId = toast.info('Preparing your PDF... this may take a moment.');
-
+    const toastId = toast.info('Preparing your PDF… this may take a moment.');
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3333';
-      
       const res = await fetch(`${apiUrl}/api/invoices/${id}/pdf`, {
         method: 'GET',
-        headers: {
-          'Accept': 'application/pdf',
-        },
-        // Render free tier can take up to 50 seconds to boot; 90s provides a safety margin
-        signal: AbortSignal.timeout(90000), 
+        headers: { 'Accept': 'application/pdf' },
+        signal: AbortSignal.timeout(90000),
       });
-
-      if (!res.ok) {
-        const errorText = await res.text();
-        console.error('PDF Generation Error:', errorText);
-        throw new Error(`Server returned ${res.status}`);
-      }
-
+      if (!res.ok) throw new Error(`Server returned ${res.status}`);
       const blob = await res.blob();
-      
-      // Ensure we actually received a PDF and not an HTML error page
-      if (blob.type !== 'application/pdf') {
-        throw new Error('Invalid file format received');
-      }
-
+      if (blob.type !== 'application/pdf') throw new Error('Invalid file format received');
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.style.display = 'none';
       a.href = url;
-      // Uses the invoice number from your state for the filename
-      a.download = `${invoice?.invoice_number || 'invoice'}.pdf`; 
-      
+      a.download = `${invoice?.invoice_number || 'invoice'}.pdf`;
       document.body.appendChild(a);
       a.click();
-      
-      // Cleanup to prevent memory leaks
-      setTimeout(() => {
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-      }, 100);
-
+      setTimeout(() => { document.body.removeChild(a); window.URL.revokeObjectURL(url); }, 100);
       toast.success('Download started!', { id: toastId });
     } catch (err: any) {
-      console.error('Download Error:', err);
       const isTimeout = err.name === 'TimeoutError';
       toast.error(
-        isTimeout 
-          ? 'The server is taking too long to wake up. Please try again in 10 seconds.' 
+        isTimeout
+          ? 'The server is taking too long to wake up. Please try again in 10 seconds.'
           : 'Failed to generate PDF. Please check your connection.',
         { id: toastId }
       );
@@ -180,21 +154,30 @@ export default function InvoiceDetailPage() {
   }
 
   if (loading) return (
-    <div className="flex items-center justify-center h-64">
-      <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+    <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
     </div>
   );
-  if (!invoice) return <div className="text-center py-20 text-slate-500">Invoice not found.</div>;
+
+  if (!invoice) return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <p className="text-slate-500">Invoice not found.</p>
+    </div>
+  );
 
   const fmt = (n: number) => formatCurrency(n, invoice.customer_snapshot.currency, invoice.customer_snapshot.country);
-  const taxBreakdown = getTaxBreakdown(invoice.items, invoice.customer_snapshot.country, invoice.is_interstate ?? true);
+  const taxBreakdown = getTaxBreakdown(invoice.items);
+  const displayName = snapshotDisplayName(invoice.customer_snapshot);
 
   return (
-    <div className="max-w-5xl">
+    <div className="min-h-screen bg-slate-100 py-8 px-4">
+
       {/* Action Bar */}
-      <div className="flex items-center justify-between mb-6">
-        <button onClick={() => router.push('/invoices')}
-          className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-700 cursor-pointer">
+      <div className="max-w-4xl mx-auto mb-6 flex items-center justify-between flex-wrap gap-3">
+        <button
+          onClick={() => router.push('/invoices')}
+          className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-700 cursor-pointer"
+        >
           <ArrowLeft className="w-4 h-4" /> Back to Invoices
         </button>
         <div className="flex items-center gap-2 flex-wrap">
@@ -220,7 +203,7 @@ export default function InvoiceDetailPage() {
             <Pencil className="w-4 h-4" /> Edit
           </button>
           <button onClick={handleDownloadPdf} disabled={downloadingPdf}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 cursor-pointer">
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-200 rounded-md hover:bg-slate-50 text-slate-600 disabled:opacity-50 cursor-pointer">
             {downloadingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
             Download PDF
           </button>
@@ -232,243 +215,216 @@ export default function InvoiceDetailPage() {
       </div>
 
       {/* Invoice Card */}
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div className="max-w-4xl mx-auto bg-white rounded-2xl shadow-sm overflow-hidden">
 
-        {/* Top color bar */}
+        {/* Top colour bar */}
         <div className="h-2 bg-blue-600" />
 
-        <div className="p-8 space-y-8">
+        <div className="p-10 space-y-8">
 
-          
-          {/* Header */}
-        <div className="flex justify-between items-start">
-        {/* Company */}
-        <div className="space-y-1">
-        {company?.logo_url ? (
-        <img 
-          src={company.logo_url} 
-          alt="Logo" 
-          className="h-14 mb-3 object-contain" 
-        />
-        ) : (
-        /* Professional Geometric Placeholder */
-          <div className="h-14 w-14 mb-3 bg-blue-600 rounded-lg flex items-center justify-center shadow-md">
-            <svg 
-              xmlns="http://www.w3.org/2000/svg" 
-              viewBox="0 0 24 24" 
-              fill="none" 
-              stroke="white" 
-              strokeWidth="2.5" 
-              strokeLinecap="round" 
-              strokeLinejoin="round" 
-              className="w-8 h-8"
-              >
-                <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                <path d="M2 17l10 5 10-5" />
-                <path d="M2 12l10 5 10-5" />
-                </svg>
-              </div>
+          {/* Header: Company + Invoice Meta */}
+          <div className="flex justify-between items-start gap-8">
+            {/* Company */}
+            <div className="space-y-1">
+              {company?.logo_url ? (
+                <img src={company.logo_url} alt="Logo" className="h-12 mb-3 object-contain" />
+              ) : (
+                <div className="w-12 h-12 rounded-lg bg-blue-600 flex items-center justify-center mb-3">
+                  <span className="text-white font-bold text-lg">{(company?.name ?? 'C')[0]}</span>
+                </div>
               )}
               <h2 className="text-xl font-bold text-slate-800">{company?.name || 'Your Company'}</h2>
               {company?.address && <p className="text-sm text-slate-500">{company.address}</p>}
-
               {company?.email && <p className="text-sm text-slate-500">{company.email}</p>}
               {company?.phone && <p className="text-sm text-slate-500">{company.phone}</p>}
-              {company?.gstin && (
-                <p className="text-xs text-slate-500 mt-1">
-                  <span className="font-semibold">GSTIN:</span> {company.gstin}
-                </p>
-              )}
-              {company?.pan && (
-                <p className="text-xs text-slate-500">
-                  <span className="font-semibold">PAN:</span> {company.pan}
-                </p>
-              )}
+              {company?.gstin && <p className="text-xs text-slate-400 mt-1">GSTIN: {company.gstin}</p>}
+              {company?.pan && <p className="text-xs text-slate-400">PAN: {company.pan}</p>}
             </div>
 
-            
-
-            {/* Invoice meta */}
-            <div className="text-right space-y-2">
-              <div className="text-3xl font-bold text-blue-600">INVOICE</div>
-              <div className="font-mono text-lg font-semibold text-slate-700">{invoice.invoice_number}</div>
-              <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold capitalize ${STATUS_BADGE[invoice.status]}`}>
+            {/* Invoice Meta */}
+            <div className="text-right space-y-2 min-w-[200px]">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Invoice</p>
+              <p className="text-2xl font-bold text-slate-800">{invoice.invoice_number}</p>
+              <span className={`inline-block text-xs font-semibold px-3 py-1 rounded-full capitalize ${STATUS_BADGE[invoice.status]}`}>
                 {invoice.status}
               </span>
-              <div className="text-sm text-slate-500 space-y-1 pt-1">
-                <div className="flex justify-end gap-3">
-                  <span className="text-slate-400">Issue Date:</span>
+              <div className="space-y-1 pt-2 text-sm text-slate-600">
+                <div className="flex justify-between gap-6">
+                  <span className="text-slate-400">Issue Date</span>
                   <span>{formatDate(invoice.issue_date)}</span>
                 </div>
-                <div className="flex justify-end gap-3">
-                  <span className="text-slate-400">Due Date:</span>
-                  <span>{formatDate(invoice.due_date)}</span>
-                </div>
-                <div className="flex justify-end gap-3">
-                  <span className="text-slate-400">Currency:</span>
+                {invoice.due_date && (
+                  <div className="flex justify-between gap-6">
+                    <span className="text-slate-400">Due Date</span>
+                    <span>{formatDate(invoice.due_date)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between gap-6">
+                  <span className="text-slate-400">Currency</span>
                   <span>{invoice.customer_snapshot.currency}</span>
                 </div>
+                {invoice.po_so_number && (
+                  <div className="flex justify-between gap-6">
+                    <span className="text-slate-400">PO/SO No.</span>
+                    <span>{invoice.po_so_number}</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
 
-          {/* Bill To + Ship To */}
-          <div className="grid grid-cols-2 gap-6 bg-slate-50 rounded-lg p-5 border border-slate-100">
-            <div>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Bill To</p>
-              <p className="font-bold text-slate-800 text-base">{invoice.customer_snapshot.name}</p>
-              {invoice.customer_snapshot.address && (
-                <p className="text-sm text-slate-500 mt-1">{invoice.customer_snapshot.address}</p>
+          {/* Bill To / Ship To */}
+          <div className="grid grid-cols-2 gap-8">
+            <div className="space-y-1">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Bill To</p>
+              <p className="font-semibold text-slate-800">{displayName}</p>
+              {invoice.customer_snapshot.company_name && (
+                <p className="text-sm text-slate-600">{invoice.customer_snapshot.company_name}</p>
               )}
-              {(invoice.customer_snapshot as any).phone && (
-                <p className="text-sm text-slate-500">{(invoice.customer_snapshot as any).phone}</p>
+              {invoice.customer_snapshot.billing_address_1 && (
+                <p className="text-sm text-slate-500">{invoice.customer_snapshot.billing_address_1}</p>
               )}
-              {invoice.customer_snapshot.email && (
-                <p className="text-sm text-slate-500">{invoice.customer_snapshot.email}</p>
+              {invoice.customer_snapshot.billing_address_2 && (
+                <p className="text-sm text-slate-500">{invoice.customer_snapshot.billing_address_2}</p>
               )}
-              {invoice.customer_snapshot.gstin && (
-                <p className="text-xs text-slate-500 mt-2">
-                  <span className="font-semibold">GSTIN:</span> {invoice.customer_snapshot.gstin}
+              {(invoice.customer_snapshot.city || invoice.customer_snapshot.state) && (
+                <p className="text-sm text-slate-500">
+                  {[invoice.customer_snapshot.city, invoice.customer_snapshot.state, invoice.customer_snapshot.postal_code].filter(Boolean).join(', ')}
                 </p>
               )}
+              {invoice.customer_snapshot.phone && <p className="text-sm text-slate-500">{invoice.customer_snapshot.phone}</p>}
+              {invoice.customer_snapshot.email && <p className="text-sm text-slate-500">{invoice.customer_snapshot.email}</p>}
+              {invoice.customer_snapshot.gstin && (
+                <p className="text-xs text-slate-400 mt-1">GSTIN: {invoice.customer_snapshot.gstin}</p>
+              )}
+              {invoice.customer_snapshot.pan && (
+                <p className="text-xs text-slate-400">PAN: {invoice.customer_snapshot.pan}</p>
+              )}
             </div>
-            <div>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Ship To</p>
+            <div className="space-y-1">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Ship To</p>
               {invoice.shipping_address ? (
-                <p className="text-sm text-slate-700">{invoice.shipping_address}</p>
-            ) : (
-              <>
-              <p className="font-bold text-slate-800 text-base">{invoice.customer_snapshot.name}</p>
-              <p className="text-sm text-slate-500 italic mt-1">
-                  {invoice.customer_snapshot.address || 'Same as billing address'}
-              </p>
-            </>
-          )}
+                <p className="text-sm text-slate-600 whitespace-pre-line">{invoice.shipping_address}</p>
+              ) : (
+                <>
+                  <p className="font-semibold text-slate-800">{displayName}</p>
+                  <p className="text-sm text-slate-500">
+                    {invoice.customer_snapshot.billing_address_1 || 'Same as billing address'}
+                  </p>
+                </>
+              )}
+            </div>
           </div>
-        </div>
 
           {/* Line Items Table */}
-          <div>
+          <div className="overflow-x-auto rounded-lg border border-slate-100">
             <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-blue-600 text-white">
-                  <th className="text-left px-3 py-3 text-xs font-semibold rounded-tl-md">#</th>
-                  <th className="text-left px-3 py-3 text-xs font-semibold">Description</th>
-                  <th className="text-left px-3 py-3 text-xs font-semibold">HSN/SAC</th>
-                  <th className="text-right px-3 py-3 text-xs font-semibold">Qty</th>
-                  <th className="text-right px-3 py-3 text-xs font-semibold">Unit Price</th>
-                  <th className="text-right px-3 py-3 text-xs font-semibold">Tax %</th>
-                  <th className="text-right px-3 py-3 text-xs font-semibold rounded-tr-md">Total</th>
+              <thead className="bg-blue-600 text-white">
+                <tr>
+                  {['#', 'Description', 'HSN/SAC', 'Qty', 'Unit Price', 'Tax', 'Amount'].map(h => (
+                    <th key={h} className="px-4 py-3 text-left font-semibold text-xs uppercase tracking-wide">{h}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {invoice.items.map((item, i) => (
-                  <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
-                    <td className="px-3 py-3 text-slate-400">{i + 1}</td>
-                    <td className="px-3 py-3 text-slate-700">{item.description}</td>
-                    <td className="px-3 py-3 text-slate-500 font-mono text-xs">
-                      {(item as any).hsn_sac || '—'}
-                    </td>
-                    <td className="px-3 py-3 text-right text-slate-500">{item.quantity}</td>
-                    <td className="px-3 py-3 text-right text-slate-500">{fmt(item.unit_price)}</td>
-                    <td className="px-3 py-3 text-right text-slate-500">{item.tax_percent}%</td>
-                    <td className="px-3 py-3 text-right font-semibold text-slate-700">{fmt(item.line_total)}</td>
-                  </tr>
-                ))}
+                {invoice.items.map((item, i) => {
+                  const base = item.quantity * item.unit_price;
+                  const taxDesc = item.taxes.map(t => `${t.name} ${t.percent}%`).join(', ') || '—';
+                  return (
+                    <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
+                      <td className="px-4 py-3 text-slate-400">{i + 1}</td>
+                      <td className="px-4 py-3 font-medium text-slate-800 whitespace-pre-line">{item.description}</td>
+                      <td className="px-4 py-3 text-slate-500">{item.hsn_sac || '—'}</td>
+                      <td className="px-4 py-3 text-slate-600">{item.quantity}</td>
+                      <td className="px-4 py-3 text-slate-600">{fmt(item.unit_price)}</td>
+                      <td className="px-4 py-3 text-slate-500 text-xs">{taxDesc}</td>
+                      <td className="px-4 py-3 font-medium text-slate-800">{fmt(item.line_total)}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
 
-          {/* Totals + Tax Breakdown */}
-          <div className="space-y-4">
-
-          {/* Totals summary — right aligned */}
+          {/* Totals */}
           <div className="flex justify-end">
-          <div className="w-72">
-          <div className="border border-slate-200 rounded-lg overflow-hidden">
-          <div className="bg-slate-50 px-4 py-2 border-b border-slate-200">
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Summary</p>
-          </div>
-          <div className="p-4 space-y-2 text-sm">
-            <div className="flex justify-between text-slate-600">
-              <span>Subtotal</span><span>{fmt(invoice.subtotal)}</span>
-            </div>
-            {taxBreakdown.igst > 0 && (
-              <div className="flex justify-between text-slate-500 text-xs">
-                <span>IGST</span><span>{fmt(taxBreakdown.igst)}</span>
+            <div className="w-72 space-y-2">
+              <div className="flex justify-between text-sm text-slate-600">
+                <span>Items</span>
+                <span>{fmt(invoice.items.reduce((s, l) => s + l.quantity * l.unit_price, 0))}</span>
               </div>
-            )}
-            {taxBreakdown.cgst > 0 && (
-              <div className="flex justify-between text-slate-500 text-xs">
-                <span>CGST</span><span>{fmt(taxBreakdown.cgst)}</span>
+              {taxBreakdown.map((t, i) => (
+                <div key={i} className="flex justify-between text-sm text-slate-600">
+                  <span>{t.name}</span>
+                  <span>{fmt(t.amount)}</span>
+                </div>
+              ))}
+              {invoice.discount_percent ? (
+                <div className="flex justify-between text-sm text-slate-500">
+                  <span>Discount ({invoice.discount_percent}%)</span>
+                  <span>-{fmt(invoice.discount_amount ?? 0)}</span>
+                </div>
+              ) : null}
+              <div className="flex justify-between text-sm font-semibold text-slate-700 pt-2 border-t border-slate-100">
+                <span>Subtotal</span>
+                <span>{fmt(invoice.subtotal)}</span>
               </div>
-            )}
-            {taxBreakdown.sgst > 0 && (
-              <div className="flex justify-between text-slate-500 text-xs">
-                <span>SGST</span><span>{fmt(taxBreakdown.sgst)}</span>
+              <div className="flex justify-between font-bold text-base text-slate-800 pt-2 border-t border-slate-200">
+                <span>Total</span>
+                <span>{fmt(invoice.total)}</span>
               </div>
-            )}
-            <div className="flex justify-between text-slate-600">
-              <span>Tax Total</span><span>{fmt(invoice.tax_total)}</span>
             </div>
-            <div className="border-t border-slate-200 pt-2 flex justify-between font-bold text-slate-800 text-base">
-              <span>Grand Total</span><span>{fmt(invoice.total)}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-          {/* Amount in Words — full width, below Grand Total */}
-          <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
-            <p className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-1">Amount in Words</p>
-              <p className="text-sm text-slate-700 font-medium italic">
-              {numberToWords(invoice.total)}
-            </p>
           </div>
 
-          {/* Bank Details — full width */}
-          {(company?.bank_name || company?.account_number) && (
+          {/* Amount in Words */}
           <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Bank Details</p>
-            <div className="text-xs text-slate-600 space-y-1">
-              {company.bank_name && <p><span className="font-semibold">Bank:</span> {company.bank_name}</p>}
-              {company.account_number && <p><span className="font-semibold">Account No:</span> {company.account_number}</p>}
-              {company.ifsc_code && <p><span className="font-semibold">IFSC:</span> {company.ifsc_code}</p>}
-              {company.branch && <p><span className="font-semibold">Branch:</span> {company.branch}</p>}
-            </div>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1">Amount in Words</p>
+            <p className="text-sm text-slate-700 italic">{numberToWords(invoice.total)}</p>
           </div>
-        )}
-        </div>
 
-          
+          {/* Bank Details */}
+          {(company?.bank_name || company?.account_number) && (
+            <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">Bank Details</p>
+              <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-sm text-slate-600">
+                {company.bank_name && <p>Bank: {company.bank_name}</p>}
+                {company.account_number && <p>Account No: {company.account_number}</p>}
+                {company.ifsc_code && <p>IFSC: {company.ifsc_code}</p>}
+                {company.branch && <p>Branch: {company.branch}</p>}
+              </div>
+            </div>
+          )}
+
           {/* Notes */}
           {invoice.notes && (
-            <div className="bg-amber-50 border border-amber-100 rounded-lg p-4">
-              <p className="text-xs font-bold text-amber-600 uppercase tracking-widest mb-1">Notes</p>
-              <p className="text-sm text-slate-600 whitespace-pre-wrap">{invoice.notes}</p>
+            <div>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1">Notes</p>
+              <p className="text-sm text-slate-600 whitespace-pre-line">{invoice.notes}</p>
             </div>
           )}
 
           {/* Authorized Signatory */}
           <div className="flex justify-end pt-4 border-t border-slate-100">
-            <div className="text-center w-56">
-              <div className="border-b border-slate-300 mb-2 pb-12" />
-              <p className="text-xs font-semibold text-slate-500">Authorized Signatory</p>
-              <p className="text-xs text-slate-400">{company?.name}</p>
+            <div className="text-center">
+              <div className="h-12 w-40 border-b border-slate-300 mb-2" />
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Authorized Signatory</p>
+              <p className="text-xs text-slate-400 mt-0.5">{company?.name}</p>
             </div>
           </div>
 
         </div>
+
+        {/* Bottom colour bar */}
+        <div className="h-2 bg-blue-600" />
       </div>
 
       {/* Delete Dialog */}
       {deleteOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
-            <h2 className="font-semibold text-slate-800 mb-2">Delete Invoice?</h2>
-            <p className="text-slate-500 text-sm mb-6">
-              Invoice <span className="font-mono font-medium">{invoice.invoice_number}</span> will be permanently deleted.
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6">
+            <h3 className="text-lg font-bold text-slate-800 mb-2">Delete Invoice?</h3>
+            <p className="text-sm text-slate-500 mb-6">
+              Invoice {invoice.invoice_number} will be permanently deleted.
             </p>
             <div className="flex justify-end gap-3">
               <button onClick={() => setDeleteOpen(false)}

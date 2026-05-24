@@ -6,25 +6,41 @@ import { toast } from 'sonner';
 import { invoicesService } from '@/services/invoices';
 import { customersService } from '@/services/customers';
 import { itemsService } from '@/services/items';
-import { Customer, Item, Invoice, InvoiceStatus } from '@/types';
+import { taxService } from '@/services/taxes';
+import { Customer, Item, Invoice, InvoiceStatus, Tax } from '@/types';
 import { formatCurrency } from '@/utils/currency';
-import { Loader2, Plus, Trash2, FileText, X, ArrowLeft } from 'lucide-react';
+import { Loader2, Plus, Trash2, X, ArrowLeft, GripVertical, UserPlus, Users } from 'lucide-react';
+
+// ── Types ────────────────────────────────────────────────────────────────────
+
+interface LineTax {
+  tax_id?: string;
+  name: string;
+  percent: number;
+  amount: number;
+}
 
 interface LineItem {
   description: string;
+  sub_description: string;
   quantity: string;
   unit_price: string;
-  tax_percent: string;
+  taxes: LineTax[];
+  taxSlots: number[];
   hsn_sac: string;
 }
+
+// ── Constants ────────────────────────────────────────────────────────────────
 
 const today = new Date().toISOString().split('T')[0];
 
 const emptyLine = (): LineItem => ({
   description: '',
+  sub_description: '',
   quantity: '1',
   unit_price: '0',
-  tax_percent: '0',
+  taxes: [],
+  taxSlots: [0],
   hsn_sac: '',
 });
 
@@ -34,9 +50,41 @@ const COUNTRIES = [
   { code: 'FR', name: 'France' }, { code: 'AU', name: 'Australia' },
   { code: 'CA', name: 'Canada' }, { code: 'JP', name: 'Japan' },
   { code: 'SG', name: 'Singapore' }, { code: 'AE', name: 'UAE' },
+  { code: 'BR', name: 'Brazil' }, { code: 'ZA', name: 'South Africa' },
+  { code: 'NG', name: 'Nigeria' }, { code: 'KE', name: 'Kenya' },
+];
+
+const CURRENCIES = [
+  { code: 'INR', symbol: '₹', name: 'Indian Rupee' },
+  { code: 'USD', symbol: '$', name: 'US Dollar' },
+  { code: 'GBP', symbol: '£', name: 'British Pound' },
+  { code: 'EUR', symbol: '€', name: 'Euro' },
+  { code: 'SGD', symbol: 'S$', name: 'Singapore Dollar' },
+  { code: 'AED', symbol: 'AED', name: 'UAE Dirham' },
+  { code: 'AUD', symbol: 'A$', name: 'Australian Dollar' },
+  { code: 'CAD', symbol: 'C$', name: 'Canadian Dollar' },
+  { code: 'JPY', symbol: '¥', name: 'Japanese Yen' },
+  { code: 'BRL', symbol: 'R$', name: 'Brazilian Real' },
 ];
 
 const STATUS_OPTIONS: InvoiceStatus[] = ['draft', 'sent', 'paid'];
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function calcLine(line: LineItem) {
+  const qty = parseFloat(line.quantity) || 0;
+  const price = parseFloat(line.unit_price) || 0;
+  const base = qty * price;
+  let taxTotal = 0;
+  const updatedTaxes = line.taxes.map(t => {
+    const amount = base * (t.percent / 100);
+    taxTotal += amount;
+    return { ...t, amount };
+  });
+  return { base, taxTotal, updatedTaxes };
+}
+
+// ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function EditInvoicePage() {
   const router = useRouter();
@@ -47,119 +95,153 @@ export default function EditInvoicePage() {
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [items, setItems] = useState<Item[]>([]);
+  const [globalTaxes, setGlobalTaxes] = useState<Tax[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
-  // Form state
+  // Form fields
   const [customerId, setCustomerId] = useState('');
   const [issueDate, setIssueDate] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [status, setStatus] = useState<InvoiceStatus>('draft');
   const [notes, setNotes] = useState('');
-  const [lineItems, setLineItems] = useState<LineItem[]>([]);
+  const [lineItems, setLineItems] = useState<LineItem[]>([emptyLine()]);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [differentShipping, setDifferentShipping] = useState(false);
-  const [shippingAddress, setShippingAddress] = useState('');
-  const [isInterstate, setIsInterstate] = useState(true);
+  const [discountAdded, setDiscountAdded] = useState(false);
+  const [discountPercent, setDiscountPercent] = useState('0');
+  const [taxExempt, setTaxExempt] = useState(false);
+  const [paymentTerms, setPaymentTerms] = useState('');
+  const [termsAndConditions, setTermsAndConditions] = useState('');
+  const [poSoNumber, setPoSoNumber] = useState('');
 
-  // Modals
+  // Customer modal
   const [showCustomerModal, setShowCustomerModal] = useState(false);
+  const [customerModalStep, setCustomerModalStep] = useState<'choice' | 'new' | 'existing'>('choice');
+  const [existingCustomerId, setExistingCustomerId] = useState('');
   const [customerForm, setCustomerForm] = useState({
-    name: '', email: '', phone: '', address: '', country: 'IN', gstin: ''
+    customer_code: '', customer_type: 'business', customer_name: '', company_name: '',
+    email: '', phone: '', billing_address_1: '', billing_address_2: '', city: '', state: '', postal_code: '',
+    country: 'IN', currency: 'INR', gstin: '', pan: '', registration_number: '',
   });
   const [savingCustomer, setSavingCustomer] = useState(false);
-  const [showItemModal, setShowItemModal] = useState(false);
-  const [itemForm, setItemForm] = useState({
-    name: '', description: '', unit_price: '', tax_percent: '0'
-  });
-  const [savingItem, setSavingItem] = useState(false);
+
+  // Tax modal
+  const [showTaxModal, setShowTaxModal] = useState(false);
+  const [taxForm, setTaxForm] = useState({ name: '', percent: '' });
+  const [savingTax, setSavingTax] = useState(false);
+
+  // ── Load ──────────────────────────────────────────────────────────────────
 
   useEffect(() => {
-    let isMounted = true;
-    const loadInitialData = async () => {
+    let mounted = true;
+    async function load() {
       try {
-        const [inv, allCustomers, allItems] = await Promise.all([
+        const [inv, allCustomers, allItems, allTaxes] = await Promise.all([
           invoicesService.getOne(id),
           customersService.getAll(),
           itemsService.getAll(),
+          taxService.getAll().catch(() => []),
         ]);
-        if (!isMounted) return;
+        if (!mounted) return;
         setInvoice(inv);
         setCustomers(allCustomers);
         setItems(allItems);
+        setGlobalTaxes(allTaxes);
         setCustomerId(inv.customer_id);
         setIssueDate(inv.issue_date.split('T')[0]);
         setDueDate(inv.due_date ? inv.due_date.split('T')[0] : '');
         setStatus(inv.status);
         setNotes(inv.notes ?? '');
-        if (inv.shipping_address) {
-          setDifferentShipping(true);
-          setShippingAddress(inv.shipping_address);
+        setPoSoNumber(inv.po_so_number ?? '');
+        setPaymentTerms(inv.payment_terms ?? '');
+        setTermsAndConditions(inv.terms_and_conditions ?? '');
+        setTaxExempt(inv.tax_exempt ?? false);
+        if (inv.discount_percent) {
+          setDiscountAdded(true);
+          setDiscountPercent(String(inv.discount_percent));
         }
-        setIsInterstate(inv.is_interstate ?? true);
+        // Map saved items back to local LineItem shape
         setLineItems(inv.items.map(l => ({
           description: l.description,
+          sub_description: '',
           quantity: String(l.quantity),
           unit_price: String(l.unit_price),
-          tax_percent: String(l.tax_percent),
+          taxes: l.taxes.map(t => ({ tax_id: t.tax_id, name: t.name, percent: t.percent, amount: t.tax_amount })),
+          taxSlots: [],  // no open slot — taxes already applied
           hsn_sac: l.hsn_sac ?? '',
         })));
-        const found = allCustomers.find(cu => cu._id === inv.customer_id);
-        setSelectedCustomer(found ?? null);
+        const found = allCustomers.find(c => c._id === inv.customer_id) ?? null;
+        setSelectedCustomer(found);
       } catch {
         toast.error('Failed to load invoice');
       } finally {
-        if (isMounted) setLoading(false);
+        if (mounted) setLoading(false);
       }
-    };
-    loadInitialData();
-    return () => { isMounted = false; };
+    }
+    load();
+    return () => { mounted = false; };
   }, [id]);
 
+  // Keep selectedCustomer in sync when customerId changes
   useEffect(() => {
-    const c = customers.find(c => c._id === customerId) ?? null;
-    setSelectedCustomer(c);
+    setSelectedCustomer(customers.find(c => c._id === customerId) ?? null);
   }, [customerId, customers]);
 
-  function calcLine(line: LineItem) {
-    const qty = parseFloat(line.quantity) || 0;
-    const price = parseFloat(line.unit_price) || 0;
-    const tax = parseFloat(line.tax_percent) || 0;
-    const base = qty * price;
-    const taxAmt = base * (tax / 100);
-    return { base, taxAmt, total: base + taxAmt };
-  }
+  // ── Derived ───────────────────────────────────────────────────────────────
 
-  const subtotal = lineItems.reduce((s, l) => s + calcLine(l).base, 0);
-  const taxTotal = lineItems.reduce((s, l) => s + calcLine(l).taxAmt, 0);
-  const grandTotal = subtotal + taxTotal;
-
-  const currency = selectedCustomer?.currency ?? invoice?.customer_snapshot.currency ?? 'USD';
-  const country = selectedCustomer?.country ?? invoice?.customer_snapshot.country ?? 'US';
+  const currency = selectedCustomer?.currency ?? invoice?.customer_snapshot.currency ?? 'INR';
+  const country = selectedCustomer?.country ?? invoice?.customer_snapshot.country ?? 'IN';
   const fmt = (n: number) => formatCurrency(n, currency, country);
 
-  function updateLine(index: number, field: keyof LineItem, value: string) {
-    setLineItems(prev => prev.map((l, i) => i === index ? { ...l, [field]: value } : l));
+  const inputClass = 'w-full border border-slate-200 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500';
+
+  let itemsBase = 0;
+  let totalTax = 0;
+  const globalTaxBreakdown: Record<string, { name: string; percent: number; amount: number }> = {};
+  lineItems.forEach(line => {
+    const { base, taxTotal, updatedTaxes } = calcLine(line);
+    itemsBase += base;
+    totalTax += taxTotal;
+    updatedTaxes.forEach(t => {
+      const key = t.tax_id ?? t.name;
+      if (!globalTaxBreakdown[key]) globalTaxBreakdown[key] = { name: t.name, percent: t.percent, amount: 0 };
+      globalTaxBreakdown[key].amount += t.amount;
+    });
+  });
+  const subtotal = itemsBase + totalTax;
+  const discP = parseFloat(discountPercent) || 0;
+  const computedDiscountAmt = subtotal * (discP / 100);
+  const grandTotal = subtotal - computedDiscountAmt;
+
+  // ── Line item helpers ─────────────────────────────────────────────────────
+
+  function updateLine(i: number, field: keyof LineItem, value: string) {
+    setLineItems(prev => prev.map((l, idx) => idx === i ? { ...l, [field]: value } : l));
   }
 
   function addLine() { setLineItems(prev => [...prev, emptyLine()]); }
 
-  function removeLine(index: number) {
+  function removeLine(i: number) {
     if (lineItems.length === 1) return;
-    setLineItems(prev => prev.filter((_, i) => i !== index));
+    setLineItems(prev => prev.filter((_, idx) => idx !== i));
   }
 
-  function fillFromItem(index: number, itemId: string) {
-    const item = items.find(i => i._id === itemId);
-    if (!item) return;
-    setLineItems(prev => prev.map((l, i) => i === index ? {
-      ...l,
-      description: item.description ?? item.name,
-      unit_price: String(item.unit_price),
-      tax_percent: String(item.tax_percent),
-      hsn_sac: item.hsn_sac ?? '',
-    } : l));
+  function addTaxToLine(lineIdx: number, tax: Tax) {
+    setLineItems(prev => prev.map((l, i) => {
+      if (i !== lineIdx) return l;
+      if (l.taxes.find(t => t.tax_id === tax.tax_id)) return l;
+      return { ...l, taxes: [...l.taxes, { tax_id: tax.tax_id, name: tax.name, percent: tax.percent, amount: 0 }] };
+    }));
   }
+
+  function removeTaxFromLine(lineIdx: number, taxIdx: number) {
+    setLineItems(prev => prev.map((l, i) => {
+      if (i !== lineIdx) return l;
+      return { ...l, taxes: l.taxes.filter((_, ti) => ti !== taxIdx) };
+    }));
+  }
+
+  // ── Validate & Submit ─────────────────────────────────────────────────────
 
   function validate() {
     const e: Record<string, string> = {};
@@ -167,8 +249,6 @@ export default function EditInvoicePage() {
     if (dueDate && dueDate < today) e.dueDate = 'Due date must be today or a future date';
     lineItems.forEach((l, i) => {
       if (!l.description.trim()) e[`desc_${i}`] = 'Required';
-      if (!l.quantity || parseFloat(l.quantity) < 0.01) e[`qty_${i}`] = 'Min 0.01';
-      if (parseFloat(l.tax_percent) > 99) e[`tax_${i}`] = 'Max 99%';
     });
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -181,22 +261,25 @@ export default function EditInvoicePage() {
     try {
       const payload = {
         customer_id: customerId,
-        issue_date: new Date(issueDate).toISOString(),
-        due_date: dueDate ? new Date(dueDate).toISOString() : undefined,
+        issue_date: issueDate,
+        due_date: dueDate || undefined,
         status,
-        shipping_address: differentShipping && shippingAddress.trim() ? shippingAddress.trim() : null,
+        po_so_number: poSoNumber,
+        payment_terms: paymentTerms,
+        terms_and_conditions: termsAndConditions,
         notes: notes.trim(),
-        is_interstate: isInterstate,
+        tax_exempt: taxExempt,
+        discount_percent: discP,
         items: lineItems.map(l => ({
-          description: l.description.trim(),
-          quantity: Number(l.quantity),
-          unit_price: Number(l.unit_price),
-          tax_percent: Number(l.tax_percent),
+          description: l.description + (l.sub_description ? `\n${l.sub_description}` : ''),
+          quantity: parseFloat(l.quantity) || 0,
+          unit_price: parseFloat(l.unit_price) || 0,
+          taxes: l.taxes.map(t => ({ tax_id: t.tax_id, name: t.name, percent: t.percent })),
           hsn_sac: l.hsn_sac.trim() || undefined,
         })),
       };
       await invoicesService.update(id, payload as any);
-      toast.success('Invoice updated successfully');
+      toast.success('Invoice updated.');
       router.push(`/invoices/${id}`);
       router.refresh();
     } catch (err: any) {
@@ -206,456 +289,588 @@ export default function EditInvoicePage() {
     }
   }
 
+  // ── Customer modal ────────────────────────────────────────────────────────
+
   async function handleCreateCustomer(e: React.FormEvent) {
     e.preventDefault();
-    if (!customerForm.name.trim()) { toast.error('Name is required'); return; }
+    if (!customerForm.customer_name.trim()) { toast.error('Contact name is required'); return; }
     setSavingCustomer(true);
     try {
       const created = await customersService.create(customerForm);
       setCustomers(prev => [created, ...prev]);
       setCustomerId(created._id);
+      setSelectedCustomer(created);
       setShowCustomerModal(false);
-      setCustomerForm({ name: '', email: '', phone: '', address: '', country: 'IN', gstin: '' });
-      toast.success('Customer saved.');
+      toast.success('Customer created.');
     } catch {
-      toast.error('Failed to create customer');
+      toast.error('Something went wrong. Please try again.');
     } finally {
       setSavingCustomer(false);
     }
   }
 
-  async function handleCreateItem(e: React.FormEvent) {
+  // ── Tax modal ─────────────────────────────────────────────────────────────
+
+  async function handleCreateTax(e: React.FormEvent) {
     e.preventDefault();
-    if (!itemForm.name.trim() || !itemForm.unit_price) {
-      toast.error('Name and price are required'); return;
-    }
-    setSavingItem(true);
+    if (!taxForm.name.trim() || !taxForm.percent) { toast.error('Name and percent are required'); return; }
+    setSavingTax(true);
     try {
-      const created = await itemsService.create({
-        name: itemForm.name,
-        description: itemForm.description,
-        unit_price: parseFloat(itemForm.unit_price),
-        tax_percent: parseFloat(itemForm.tax_percent) || 0,
-      });
-      setItems(prev => [created, ...prev]);
-      setShowItemModal(false);
-      setItemForm({ name: '', description: '', unit_price: '', tax_percent: '0' });
-      toast.success('Item saved.');
+      const created = await taxService.create({ name: taxForm.name, percent: parseFloat(taxForm.percent) });
+      setGlobalTaxes(prev => [...prev, created]);
+      setShowTaxModal(false);
+      setTaxForm({ name: '', percent: '' });
+      toast.success('Tax created.');
     } catch {
-      toast.error('Failed to create item');
+      toast.error('Something went wrong. Please try again.');
     } finally {
-      setSavingItem(false);
+      setSavingTax(false);
     }
   }
 
-  const inputClass = "w-full border border-slate-200 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500";
-  const errorClass = "text-red-500 text-xs mt-0.5";
+  // ── Render ────────────────────────────────────────────────────────────────
 
   if (loading) return (
-    <div className="flex flex-col items-center justify-center h-96 gap-4">
-      <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-      <p className="text-slate-500 text-sm">Loading invoice...</p>
+    <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
     </div>
   );
 
   if (!invoice) return (
-    <div className="text-center py-20 text-slate-500">Invoice not found.</div>
+    <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <p className="text-slate-500">Invoice not found.</p>
+    </div>
   );
 
   return (
-    <div className="max-w-5xl pb-20">
+    <div className="min-h-screen bg-slate-50">
+      <form onSubmit={handleSubmit}>
 
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-8">
-        <button type="button" onClick={() => router.push(`/invoices/${id}`)}
-          className="p-2 hover:bg-slate-100 rounded-full transition-colors cursor-pointer">
-          <ArrowLeft className="w-5 h-5 text-slate-500" />
-        </button>
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-            <FileText className="w-6 h-6 text-blue-600" />
-            Edit {invoice.invoice_number}
-          </h1>
-          <p className="text-slate-500 text-sm">Update the details for this invoice</p>
+        {/* Top Bar */}
+        <div className="bg-white border-b border-slate-200 px-8 py-4 flex items-center justify-between sticky top-0 z-10">
+          <div className="flex items-center gap-4">
+            <button type="button" onClick={() => router.push(`/invoices/${id}`)}
+              className="text-slate-400 hover:text-slate-600 cursor-pointer">
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <div>
+              <h1 className="text-lg font-bold text-slate-800">Edit Invoice</h1>
+              <p className="text-sm text-slate-400">{invoice.invoice_number}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button type="button" onClick={() => router.push(`/invoices/${id}`)}
+              className="px-4 py-2 text-sm rounded-md border border-slate-200 hover:bg-slate-50 cursor-pointer">
+              Cancel
+            </button>
+            <button type="submit" disabled={saving}
+              className="flex items-center gap-2 bg-blue-600 text-white px-6 py-2 rounded-md text-sm font-bold hover:bg-blue-700 disabled:opacity-50 cursor-pointer">
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+              Save Changes
+            </button>
+          </div>
         </div>
-      </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="max-w-6xl mx-auto px-8 py-8 space-y-8">
 
-        {/* Invoice Details */}
-        <div className="bg-white rounded-xl border border-slate-200 p-6">
-          <h2 className="font-semibold text-slate-700 mb-4">Invoice Details</h2>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-
+          {/* Meta row */}
+          <div className="grid grid-cols-12 gap-6">
             {/* Customer */}
-            <div className="md:col-span-1">
-              <label className="text-sm font-medium text-slate-700">
-                Customer <span className="text-red-500">*</span>
-              </label>
-              <div className="flex gap-2 mt-1">
-                <select value={customerId} onChange={e => setCustomerId(e.target.value)}
-                  className={inputClass}>
-                  <option value="">Select customer...</option>
-                  {customers.map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
-                </select>
-                <button type="button" onClick={() => setShowCustomerModal(true)}
-                  className="shrink-0 p-2 border border-slate-200 rounded-md hover:bg-slate-50 text-slate-500 cursor-pointer">
-                  <Plus className="w-4 h-4" />
-                </button>
-              </div>
-              {errors.customer && <p className={errorClass}>{errors.customer}</p>}
-              {selectedCustomer && (
-                <div className="mt-2 p-2 bg-slate-50 rounded text-xs text-slate-500 space-y-0.5">
-                  {selectedCustomer.email && <p>{selectedCustomer.email}</p>}
-                  {selectedCustomer.address && <p>{selectedCustomer.address}</p>}
-                  <p className="font-medium text-slate-600">
-                    Currency: <span className="text-blue-600">{selectedCustomer.currency}</span>
-                  </p>
+            <div className="col-span-6 bg-white rounded-xl border border-slate-200 p-6">
+              <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-4">Customer</h2>
+              {selectedCustomer ? (
+                <div className="relative">
+                  <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                    <p className="font-semibold text-slate-800">{selectedCustomer.customer_name}</p>
+                    {selectedCustomer.company_name && <p className="text-sm text-slate-500">{selectedCustomer.company_name}</p>}
+                    {selectedCustomer.email && <p className="text-sm text-slate-500">{selectedCustomer.email}</p>}
+                    {selectedCustomer.billing_address_1 && <p className="text-sm text-slate-500">{selectedCustomer.billing_address_1}</p>}
+                    <p className="text-xs text-slate-400 mt-1">{selectedCustomer.currency} · {selectedCustomer.country}</p>
+                  </div>
+                  <button type="button" onClick={() => setSelectedCustomer(null)}
+                    className="absolute top-2 right-2 text-slate-400 hover:text-slate-600 cursor-pointer">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <select value={customerId} onChange={e => setCustomerId(e.target.value)} className={inputClass}>
+                    <option value="">Select a customer</option>
+                    {customers.map(c => (
+                      <option key={c._id} value={c._id}>
+                        {c.customer_name}{c.company_name ? ` — ${c.company_name}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {errors.customer && <p className="text-red-500 text-xs">{errors.customer}</p>}
+                  <button type="button"
+                    onClick={() => { setCustomerModalStep('choice'); setExistingCustomerId(''); setShowCustomerModal(true); }}
+                    className="text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 cursor-pointer">
+                    <Plus className="w-4 h-4" /> Add a customer
+                  </button>
                 </div>
               )}
             </div>
 
-            {/* Issue Date */}
-            <div>
-              <label className="text-sm font-medium text-slate-700">
-                Issue Date <span className="text-red-500">*</span>
-              </label>
-              <input type="date" value={issueDate} readOnly
-                className={`${inputClass} mt-1 bg-slate-50 cursor-not-allowed text-slate-400`} />
-              <p className="text-xs text-slate-400 mt-0.5">Cannot be changed</p>
-            </div>
-
-            {/* Due Date */}
-            <div>
-              <label className="text-sm font-medium text-slate-700">Due Date</label>
-              <input type="date" value={dueDate} min={today}
-                onChange={e => setDueDate(e.target.value)}
-                className={`${inputClass} mt-1`} />
-              {errors.dueDate && <p className={errorClass}>{errors.dueDate}</p>}
-            </div>
-
-            {/* Status */}
-            <div>
-              <label className="text-sm font-medium text-slate-700">Status</label>
-              <select value={status} onChange={e => setStatus(e.target.value as InvoiceStatus)}
-                className={`${inputClass} mt-1`}>
-                {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
-
-          </div>
-        </div>
-
-        {/* Line Items */}
-        <div className="bg-white rounded-xl border border-slate-200 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold text-slate-700">Line Items</h2>
-            <button type="button" onClick={() => setShowItemModal(true)}
-              className="text-xs text-blue-600 hover:underline flex items-center gap-1 cursor-pointer">
-              <Plus className="w-3 h-3" /> New Item
-            </button>
-          </div>
-
-          {/* Currency warning */}
-          {selectedCustomer && (
-            <p className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded px-3 py-2 mb-4">
-              ⚠ Prices are in <strong>{selectedCustomer.currency}</strong>. Item catalogue prices will be treated as {selectedCustomer.currency}.
-            </p>
-          )}
-
-          {/* Desktop header */}
-          <div className="hidden md:grid grid-cols-12 gap-2 text-xs font-semibold text-slate-400 uppercase tracking-wide px-1 mb-2">
-            <div className="col-span-2">Catalogue</div>
-            <div className="col-span-3">Description</div>
-            <div className="col-span-2">HSN/SAC</div>
-            <div className="col-span-1">Qty</div>
-            <div className="col-span-1">Price</div>
-            <div className="col-span-1">Tax %</div>
-            <div className="col-span-1 text-right">Total</div>
-            <div className="col-span-1"></div>
-          </div>
-
-          <div className="space-y-3">
-            {lineItems.map((line, i) => {
-              const { total } = calcLine(line);
-              return (
-                <div key={i} className="grid grid-cols-12 gap-2 items-start">
-
-                  {/* Catalogue */}
-                  <div className="col-span-12 md:col-span-2">
-                    <select onChange={e => fillFromItem(i, e.target.value)}
-                      defaultValue="" className={inputClass}>
-                      <option value="">Pick item...</option>
-                      {items.map(item => (
-                        <option key={item._id} value={item._id}>{item.name}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Description */}
-                  <div className="col-span-12 md:col-span-3">
-                    <input value={line.description}
-                      onChange={e => updateLine(i, 'description', e.target.value)}
-                      placeholder="Description" className={inputClass} />
-                    {errors[`desc_${i}`] && <p className={errorClass}>{errors[`desc_${i}`]}</p>}
-                  </div>
-
-                  {/* HSN/SAC */}
-                  <div className="col-span-12 md:col-span-2">
-                    <input value={line.hsn_sac}
-                      onChange={e => updateLine(i, 'hsn_sac', e.target.value)}
-                      placeholder="HSN/SAC" className={inputClass} />
-                  </div>
-
-                  {/* Qty */}
-                  <div className="col-span-4 md:col-span-1">
-                    <input type="number" value={line.quantity} min="1"
-                      onChange={e => updateLine(i, 'quantity', e.target.value)}
-                      placeholder="1" className={inputClass} />
-                    {errors[`qty_${i}`] && <p className={errorClass}>{errors[`qty_${i}`]}</p>}
-                  </div>
-
-                  {/* Unit Price */}
-                  <div className="col-span-4 md:col-span-1">
-                    <input type="number" value={line.unit_price} step="0.01"
-                      onChange={e => updateLine(i, 'unit_price', e.target.value)}
-                      placeholder="0.00" className={inputClass} />
-                  </div>
-
-                  {/* Tax % */}
-                  <div className="col-span-3 md:col-span-1">
-                    <input type="number" value={line.tax_percent} min="0" max="99"
-                      onChange={e => updateLine(i, 'tax_percent', e.target.value)}
-                      placeholder="0" className={inputClass} />
-                    {errors[`tax_${i}`] && <p className={errorClass}>{errors[`tax_${i}`]}</p>}
-                  </div>
-
-                  {/* Line Total */}
-                  <div className="col-span-1 flex items-center justify-end">
-                    <span className="text-sm font-medium text-slate-700 whitespace-nowrap">
-                      {fmt(total)}
-                    </span>
-                  </div>
-
-                  {/* Remove */}
-                  <div className="col-span-1 flex items-center justify-center">
-                    <button type="button" onClick={() => removeLine(i)}
-                      disabled={lineItems.length === 1}
-                      className="p-1.5 text-slate-400 hover:text-red-500 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                </div>
-              );
-            })}
-          </div>
-
-          <button type="button" onClick={addLine}
-            className="mt-4 flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 font-medium cursor-pointer">
-            <Plus className="w-4 h-4" /> Add Line
-          </button>
-
-          {/* Totals */}
-          <div className="mt-6 border-t border-slate-200 pt-4 flex justify-end">
-            <div className="w-64 space-y-2 text-sm">
-              <div className="flex justify-between text-slate-600">
-                <span>Subtotal</span><span>{fmt(subtotal)}</span>
-              </div>
-              <div className="flex justify-between text-slate-600">
-                <span>Tax</span><span>{fmt(taxTotal)}</span>
-              </div>
-              <div className="flex justify-between font-bold text-slate-800 text-base border-t border-slate-200 pt-2">
-                <span>Total</span><span>{fmt(grandTotal)}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Shipping Address */}
-        <div className="bg-white rounded-xl border border-slate-200 p-6">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-slate-700">Shipping Address</h2>
-            <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
-              <input type="checkbox" checked={differentShipping}
-                onChange={e => {
-                  setDifferentShipping(e.target.checked);
-                  if (!e.target.checked) setShippingAddress('');
-                }}
-                className="rounded border-slate-300 cursor-pointer" />
-              Different from billing address
-            </label>
-          </div>
-          {differentShipping ? (
-            <input value={shippingAddress} onChange={e => setShippingAddress(e.target.value)}
-              placeholder="Enter shipping address..."
-              className={inputClass} />
-          ) : (
-            <p className="text-sm text-slate-400 italic">
-              {selectedCustomer?.address || 'Same as billing address'}
-            </p>
-          )}
-        </div>
-
-        {/* Tax Type */}
-        <div className="bg-white rounded-xl border border-slate-200 p-6">
-          <h2 className="font-semibold text-slate-700 mb-3">Tax Type</h2>
-          <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
-            <input type="checkbox" checked={isInterstate}
-              onChange={e => setIsInterstate(e.target.checked)}
-              className="rounded border-slate-300 cursor-pointer" />
-            Interstate supply (IGST) — uncheck for intrastate (CGST + SGST)
-          </label>
-        </div>
-
-        {/* Notes */}
-        <div className="bg-white rounded-xl border border-slate-200 p-6">
-          <h2 className="font-semibold text-slate-700 mb-4">Notes</h2>
-          <textarea value={notes} onChange={e => setNotes(e.target.value)}
-            placeholder="Payment terms, bank details, or any other notes..."
-            rows={3}
-            className="w-full border border-slate-200 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
-        </div>
-
-        {/* Actions */}
-        <div className="flex justify-end gap-3">
-          <button type="button" onClick={() => router.push(`/invoices/${id}`)}
-            className="px-4 py-2 text-sm rounded-md border border-slate-200 hover:bg-slate-50 cursor-pointer">
-            Cancel
-          </button>
-          <button type="submit" disabled={saving}
-            className="flex items-center gap-2 bg-blue-600 text-white px-6 py-2 rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 cursor-pointer">
-            {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-            Save Changes
-          </button>
-        </div>
-
-      </form>
-
-      {/* Customer Modal */}
-      {showCustomerModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
-            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
-              <h2 className="font-semibold text-slate-800">New Customer</h2>
-              <button onClick={() => setShowCustomerModal(false)}
-                className="text-slate-400 hover:text-slate-600 cursor-pointer">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <form onSubmit={handleCreateCustomer} className="p-6 space-y-4">
-              <div>
-                <label className="text-sm font-medium text-slate-700">Name *</label>
-                <input value={customerForm.name}
-                  onChange={e => setCustomerForm(p => ({ ...p, name: e.target.value }))}
-                  className={`${inputClass} mt-1`} placeholder="John Doe" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
+            {/* Invoice Details */}
+            <div className="col-span-6 bg-white rounded-xl border border-slate-200 p-6 space-y-4">
+              <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wide">Invoice Details</h2>
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm font-medium text-slate-700">Email</label>
-                  <input value={customerForm.email}
-                    onChange={e => setCustomerForm(p => ({ ...p, email: e.target.value }))}
-                    className={`${inputClass} mt-1`} placeholder="john@example.com" />
+                  <label className="text-xs font-bold text-slate-600 uppercase">Invoice Date</label>
+                  <input type="date" value={issueDate} readOnly
+                    className={`${inputClass} mt-1 bg-slate-50 text-slate-500 cursor-not-allowed`} />
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-slate-700">Phone</label>
-                  <input value={customerForm.phone}
-                    onChange={e => setCustomerForm(p => ({ ...p, phone: e.target.value }))}
-                    className={`${inputClass} mt-1`} placeholder="+91 98765 43210" />
+                  <label className="text-xs font-bold text-slate-600 uppercase">Due Date</label>
+                  <input type="date" value={dueDate} min={today} onChange={e => setDueDate(e.target.value)}
+                    className={`${inputClass} mt-1`} />
+                  {errors.dueDate && <p className="text-red-500 text-xs mt-1">{errors.dueDate}</p>}
                 </div>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-slate-700">Address</label>
-                <input value={customerForm.address}
-                  onChange={e => setCustomerForm(p => ({ ...p, address: e.target.value }))}
-                  className={`${inputClass} mt-1`} placeholder="123 Main St, City" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-sm font-medium text-slate-700">Country *</label>
-                  <select value={customerForm.country}
-                    onChange={e => setCustomerForm(p => ({ ...p, country: e.target.value }))}
-                    className={`${inputClass} mt-1`}>
-                    {COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
+                  <label className="text-xs font-bold text-slate-600 uppercase">Status</label>
+                  <select value={status} onChange={e => setStatus(e.target.value as InvoiceStatus)} className={`${inputClass} mt-1`}>
+                    {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-slate-700">GSTIN</label>
-                  <input value={customerForm.gstin}
-                    onChange={e => setCustomerForm(p => ({ ...p, gstin: e.target.value }))}
-                    className={`${inputClass} mt-1`} placeholder="22AAAAA0000A1Z5" />
+                  <label className="text-xs font-bold text-slate-600 uppercase">PO / SO Number</label>
+                  <input value={poSoNumber} onChange={e => setPoSoNumber(e.target.value)} className={`${inputClass} mt-1`} />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-600 uppercase">Payment Terms</label>
+                  <input value={paymentTerms} onChange={e => setPaymentTerms(e.target.value)} className={`${inputClass} mt-1`} placeholder="e.g. Net 30" />
                 </div>
               </div>
-              <div className="flex justify-end gap-3 pt-2">
-                <button type="button" onClick={() => setShowCustomerModal(false)}
-                  className="px-4 py-2 text-sm rounded-md border border-slate-200 hover:bg-slate-50 cursor-pointer">
-                  Cancel
-                </button>
-                <button type="submit" disabled={savingCustomer}
-                  className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 cursor-pointer">
-                  {savingCustomer && <Loader2 className="w-4 h-4 animate-spin" />}
-                  Create
+            </div>
+          </div>
+
+          {/* Line Items */}
+          <div className="bg-slate-50 border-y border-slate-200 rounded-xl overflow-hidden">
+            <div className="max-w-full">
+              {/* Header */}
+              <div className="grid grid-cols-12 gap-4 px-8 py-3 text-xs font-bold text-slate-600 uppercase border-b border-slate-200">
+                <div className="col-span-6">Items</div>
+                <div className="col-span-2">Quantity</div>
+                <div className="col-span-2">Price</div>
+                <div className="col-span-2 text-right">Amount</div>
+              </div>
+
+              {/* Rows */}
+              <div className="bg-white">
+                {lineItems.map((line, i) => {
+                  const { base, updatedTaxes } = calcLine(line);
+                  return (
+                    <div key={i} className="group border-b border-slate-100 relative">
+                      <div className="absolute left-2 top-4 opacity-0 group-hover:opacity-100 cursor-move text-slate-300">
+                        <GripVertical className="w-4 h-4" />
+                      </div>
+
+                      {/* Main row */}
+                      <div className="grid grid-cols-12 gap-4 px-8 pt-4 pb-2 items-center">
+                        <div className="col-span-6">
+                          <select
+                            value={line.description}
+                            onChange={e => {
+                              const val = e.target.value;
+                              const item = items.find(it => it.name === val);
+                              if (item) {
+                                setLineItems(prev => prev.map((l, idx) => idx === i
+                                  ? { ...l, description: item.name, unit_price: String(item.unit_price) }
+                                  : l));
+                              } else {
+                                updateLine(i, 'description', val);
+                              }
+                            }}
+                            className="w-full text-slate-800 font-medium bg-transparent border-0 border-b border-transparent hover:border-slate-300 focus:border-blue-500 focus:ring-0 px-0 py-1 outline-none cursor-pointer transition-colors"
+                          >
+                            <option value="">Select an item</option>
+                            {items.map(item => <option key={item._id} value={item.name}>{item.name}</option>)}
+                          </select>
+                          {errors[`desc_${i}`] && <p className="text-red-500 text-xs mt-1">{errors[`desc_${i}`]}</p>}
+                        </div>
+                        <div className="col-span-2">
+                          <input type="number" min="1" step="1" value={line.quantity}
+                            onChange={e => updateLine(i, 'quantity', e.target.value)} className={inputClass} />
+                        </div>
+                        <div className="col-span-2">
+                          <input type="number" min="0" step="0.01" value={line.unit_price}
+                            onChange={e => updateLine(i, 'unit_price', e.target.value)} className={inputClass} />
+                        </div>
+                        <div className="col-span-2 flex items-center justify-end gap-3">
+                          <span className="font-medium text-slate-800">{fmt(base)}</span>
+                          <button type="button" onClick={() => removeLine(i)}
+                            className="text-blue-500 hover:text-red-500 cursor-pointer">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Applied taxes */}
+                      {updatedTaxes.map((tax, tIndex) => (
+                        <div key={tIndex} className="grid grid-cols-12 gap-4 px-8 py-1 items-center">
+                          <div className="col-span-6" />
+                          <div className="col-span-2 flex items-center gap-1">
+                            <span className="text-xs text-slate-500">{tax.name} ({tax.percent}%)</span>
+                            <button type="button" onClick={() => removeTaxFromLine(i, tIndex)}
+                              className="text-slate-300 hover:text-red-400 cursor-pointer">
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                          <div className="col-span-2" />
+                          <div className="col-span-2 text-right pr-7">
+                            <span className="text-sm text-slate-500">{fmt(tax.amount)}</span>
+                          </div>
+                        </div>
+                      ))}
+
+                      {/* Tax selector */}
+                      <div className="grid grid-cols-12 gap-4 px-8 pb-3 items-start">
+                        <div className="col-span-6" />
+                        <div className="col-span-2 flex items-center pt-0.5">
+                          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Tax</span>
+                        </div>
+                        <div className="col-span-2 space-y-1.5">
+                          {(line.taxSlots ?? []).map((_, slotIdx) => (
+                            <select
+                              key={slotIdx}
+                              className="w-full text-xs border border-slate-200 rounded px-2 py-1.5 outline-none focus:border-blue-500 bg-white cursor-pointer"
+                              value=""
+                              onChange={e => {
+                                if (e.target.value === 'custom') setShowTaxModal(true);
+                                else if (e.target.value) {
+                                  addTaxToLine(i, globalTaxes.find(t => t.tax_id === e.target.value)!);
+                                  setLineItems(prev => prev.map((l, idx) => {
+                                    if (idx !== i) return l;
+                                    const slots = [...(l.taxSlots ?? [])];
+                                    slots.splice(slotIdx, 1);
+                                    return { ...l, taxSlots: slots };
+                                  }));
+                                }
+                              }}
+                            >
+                              <option value="">Select a tax</option>
+                              {globalTaxes
+                                .filter(t => !line.taxes.find(lt => lt.tax_id === t.tax_id))
+                                .map(t => <option key={t.tax_id} value={t.tax_id}>{t.name} ({t.percent}%)</option>)}
+                              <option value="custom">+ Add custom tax</option>
+                            </select>
+                          ))}
+                          <button type="button"
+                            onClick={() => setLineItems(prev => prev.map((l, idx) => {
+                              if (idx !== i) return l;
+                              return { ...l, taxSlots: [...(l.taxSlots ?? []), (l.taxSlots ?? []).length] };
+                            }))}
+                            className="text-xs text-blue-500 hover:text-blue-700 font-medium flex items-center gap-0.5 cursor-pointer">
+                            <Plus className="w-3 h-3" /> add a tax
+                          </button>
+                        </div>
+                        <div className="col-span-2" />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Add item */}
+              <div className="px-8 py-4 bg-white border-b border-slate-200">
+                <button type="button" onClick={addLine}
+                  className="text-sm font-bold text-blue-600 flex items-center gap-1 hover:text-blue-800 cursor-pointer">
+                  <Plus className="w-4 h-4" /> Add an item
                 </button>
               </div>
-            </form>
+            </div>
           </div>
-        </div>
-      )}
 
-      {/* Item Modal */}
-      {showItemModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
-            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
-              <h2 className="font-semibold text-slate-800">New Item</h2>
-              <button onClick={() => setShowItemModal(false)}
-                className="text-slate-400 hover:text-slate-600 cursor-pointer">
-                <X className="w-4 h-4" />
+          {/* Totals */}
+          <div className="flex justify-end">
+            <div className="w-80 space-y-3 pt-4">
+              <div className="flex justify-between text-sm text-slate-600">
+                <span>Items</span>
+                <span>{fmt(itemsBase)}</span>
+              </div>
+              {Object.values(globalTaxBreakdown).map((tax, i) => (
+                <div key={i} className="flex justify-between text-sm text-slate-600">
+                  <span className="text-slate-500">{tax.name} ({tax.percent}%)</span>
+                  <span>{fmt(tax.amount)}</span>
+                </div>
+              ))}
+              <div className="flex justify-between text-sm font-semibold text-slate-700 pt-2 border-t border-slate-100">
+                <span>Subtotal</span>
+                <span>{fmt(subtotal)}</span>
+              </div>
+              {discountAdded ? (
+                <div className="flex justify-between items-center text-sm text-slate-600">
+                  <div className="flex items-center gap-2">
+                    <input type="number" min="0" max="100" value={discountPercent}
+                      onChange={e => setDiscountPercent(e.target.value)}
+                      className="w-16 border border-slate-200 rounded px-2 py-1 text-right outline-none focus:border-blue-500" />
+                    <span className="text-slate-500">% discount</span>
+                    <button type="button" onClick={() => { setDiscountAdded(false); setDiscountPercent('0'); }}
+                      className="text-slate-300 hover:text-red-400 cursor-pointer">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  <span className="text-slate-500">-{fmt(computedDiscountAmt)}</span>
+                </div>
+              ) : (
+                <button type="button" onClick={() => setDiscountAdded(true)}
+                  className="text-left text-sm text-blue-600 font-medium hover:text-blue-800 flex items-center gap-1 cursor-pointer">
+                  <Plus className="w-3.5 h-3.5" /> Add a discount
+                </button>
+              )}
+              <div className="flex justify-between items-center font-bold text-slate-800 pt-3 border-t border-slate-200">
+                <span>Total</span>
+                <div className="flex items-center gap-4">
+                  <span className="text-sm px-3 py-1 bg-slate-100 text-slate-500 rounded border border-slate-200 font-normal">
+                    {CURRENCIES.find(c => c.code === currency)
+                      ? `${currency} (${CURRENCIES.find(c => c.code === currency)!.symbol}) — ${CURRENCIES.find(c => c.code === currency)!.name}`
+                      : currency}
+                  </span>
+                  <span className="text-lg">{fmt(grandTotal)}</span>
+                </div>
+              </div>
+              <div className="flex justify-between font-bold text-slate-800 pt-4 border-t border-slate-200">
+                <span>Amount Due</span>
+                <span className="text-lg">{fmt(grandTotal)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Notes / Terms */}
+          <div className="bg-white rounded-xl border border-slate-200 p-6 grid grid-cols-2 gap-6">
+            <div>
+              <label className="text-xs font-bold text-slate-600 uppercase">Notes</label>
+              <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3}
+                placeholder="Any notes for the customer…"
+                className="mt-1 w-full border border-slate-200 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-slate-600 uppercase">Terms & Conditions</label>
+              <textarea value={termsAndConditions} onChange={e => setTermsAndConditions(e.target.value)} rows={3}
+                className="mt-1 w-full border border-slate-200 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+            </div>
+          </div>
+
+        </div>
+      </form>
+
+      {/* ── Customer Modal ── */}
+      {showCustomerModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl my-8">
+            <div className="flex items-center justify-between p-6 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                {customerModalStep !== 'choice' && (
+                  <button type="button" onClick={() => setCustomerModalStep('choice')}
+                    className="text-slate-400 hover:text-slate-600 cursor-pointer">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
+                )}
+                <h2 className="text-xl font-bold text-slate-800">
+                  {customerModalStep === 'choice' && 'Add a customer'}
+                  {customerModalStep === 'new' && 'New customer'}
+                  {customerModalStep === 'existing' && 'Choose existing customer'}
+                </h2>
+              </div>
+              <button onClick={() => setShowCustomerModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
+                <X className="w-5 h-5" />
               </button>
             </div>
-            <form onSubmit={handleCreateItem} className="p-6 space-y-4">
+
+            {/* Choice */}
+            {customerModalStep === 'choice' && (
+              <div className="p-8 grid grid-cols-2 gap-5">
+                <button type="button"
+                  onClick={() => {
+                    setCustomerForm({ customer_code: '', customer_type: 'business', customer_name: '', company_name: '', email: '', phone: '', billing_address_1: '', billing_address_2: '', city: '', state: '', postal_code: '', country: 'IN', currency: 'INR', gstin: '', pan: '', registration_number: '' });
+                    setCustomerModalStep('new');
+                  }}
+                  className="group flex flex-col items-center justify-center gap-4 rounded-xl border-2 border-slate-200 hover:border-blue-500 hover:bg-blue-50/40 p-10 transition-all cursor-pointer text-center">
+                  <div className="w-14 h-14 rounded-full bg-blue-100 group-hover:bg-blue-200 flex items-center justify-center transition-colors">
+                    <UserPlus className="w-7 h-7 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-slate-800 text-base">New customer</p>
+                    <p className="text-sm text-slate-500 mt-1">Create and add a brand new customer</p>
+                  </div>
+                </button>
+                <button type="button"
+                  onClick={() => { setExistingCustomerId(''); setCustomerModalStep('existing'); }}
+                  className="group flex flex-col items-center justify-center gap-4 rounded-xl border-2 border-slate-200 hover:border-blue-500 hover:bg-blue-50/40 p-10 transition-all cursor-pointer text-center">
+                  <div className="w-14 h-14 rounded-full bg-slate-100 group-hover:bg-blue-200 flex items-center justify-center transition-colors">
+                    <Users className="w-7 h-7 text-slate-500 group-hover:text-blue-600 transition-colors" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-slate-800 text-base">Existing customer</p>
+                    <p className="text-sm text-slate-500 mt-1">Pick from your saved customers</p>
+                  </div>
+                </button>
+              </div>
+            )}
+
+            {/* Existing */}
+            {customerModalStep === 'existing' && (
+              <div className="p-6 space-y-6">
+                <div>
+                  <label className="text-xs font-bold text-slate-600 uppercase">Select customer</label>
+                  <select value={existingCustomerId} onChange={e => setExistingCustomerId(e.target.value)} className={`${inputClass} mt-2`}>
+                    <option value="">— choose a customer —</option>
+                    {customers.map(c => (
+                      <option key={c._id} value={c._id}>
+                        {c.customer_name}{c.company_name ? ` — ${c.company_name}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {existingCustomerId && (() => {
+                  const c = customers.find(x => x._id === existingCustomerId);
+                  if (!c) return null;
+                  return (
+                    <div className="bg-slate-50 rounded-lg border border-slate-200 p-4 space-y-1 text-sm text-slate-600">
+                      {c.company_name && <p className="font-semibold text-slate-800">{c.company_name}</p>}
+                      {c.email && <p>{c.email}</p>}
+                      {c.phone && <p>{c.phone}</p>}
+                      {c.billing_address_1 && <p>{c.billing_address_1}{c.city ? `, ${c.city}` : ''}</p>}
+                      <p className="text-xs text-slate-400 pt-1">{c.currency} · {c.country}{c.gstin ? ` · GSTIN: ${c.gstin}` : ''}</p>
+                    </div>
+                  );
+                })()}
+                <div className="flex justify-end gap-3">
+                  <button type="button" onClick={() => setShowCustomerModal(false)}
+                    className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 rounded-md border border-slate-200 cursor-pointer">Cancel</button>
+                  <button type="button" disabled={!existingCustomerId}
+                    onClick={() => {
+                      const c = customers.find(x => x._id === existingCustomerId);
+                      if (c) { setSelectedCustomer(c); setCustomerId(c._id); setShowCustomerModal(false); }
+                    }}
+                    className="px-6 py-2 bg-blue-600 text-white text-sm font-bold rounded-md hover:bg-blue-700 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
+                    Select customer
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* New customer form */}
+            {customerModalStep === 'new' && (
+              <form onSubmit={handleCreateCustomer} className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold text-slate-600 uppercase">Customer Type</label>
+                    <select value={customerForm.customer_type} onChange={e => setCustomerForm(p => ({...p, customer_type: e.target.value}))} className={`${inputClass} mt-1`}>
+                      <option value="business">Business</option>
+                      <option value="individual">Individual</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-600 uppercase">Customer Code</label>
+                    <input value={customerForm.customer_code} onChange={e => setCustomerForm(p => ({...p, customer_code: e.target.value}))} placeholder="e.g. CUST-001" className={`${inputClass} mt-1`} />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-600 uppercase">Contact Name *</label>
+                    <input value={customerForm.customer_name} onChange={e => setCustomerForm(p => ({...p, customer_name: e.target.value}))} className={`${inputClass} mt-1`} required />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-600 uppercase">Company Name</label>
+                    <input value={customerForm.company_name} onChange={e => setCustomerForm(p => ({...p, company_name: e.target.value}))} className={`${inputClass} mt-1`} />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-600 uppercase">Email</label>
+                    <input type="email" value={customerForm.email} onChange={e => setCustomerForm(p => ({...p, email: e.target.value}))} className={`${inputClass} mt-1`} />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-600 uppercase">Phone</label>
+                    <input value={customerForm.phone} onChange={e => setCustomerForm(p => ({...p, phone: e.target.value}))} className={`${inputClass} mt-1`} />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-600 uppercase">Currency</label>
+                    <select value={customerForm.currency} onChange={e => setCustomerForm(p => ({...p, currency: e.target.value}))} className={`${inputClass} mt-1`}>
+                      {CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.code} ({c.symbol}) — {c.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div className="border-t border-slate-100 pt-5">
+                  <h3 className="font-bold text-slate-700 mb-4">Billing Address</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="col-span-2"><input value={customerForm.billing_address_1} onChange={e => setCustomerForm(p => ({...p, billing_address_1: e.target.value}))} placeholder="Address Line 1" className={inputClass} /></div>
+                    <div className="col-span-2"><input value={customerForm.billing_address_2} onChange={e => setCustomerForm(p => ({...p, billing_address_2: e.target.value}))} placeholder="Address Line 2" className={inputClass} /></div>
+                    <div><input value={customerForm.city} onChange={e => setCustomerForm(p => ({...p, city: e.target.value}))} placeholder="City" className={inputClass} /></div>
+                    <div><input value={customerForm.state} onChange={e => setCustomerForm(p => ({...p, state: e.target.value}))} placeholder="State / Province" className={inputClass} /></div>
+                    <div><input value={customerForm.postal_code} onChange={e => setCustomerForm(p => ({...p, postal_code: e.target.value}))} placeholder="Postal Code" className={inputClass} /></div>
+                    <div>
+                      <select value={customerForm.country} onChange={e => setCustomerForm(p => ({...p, country: e.target.value}))} className={inputClass}>
+                        {COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+                <div className="border-t border-slate-100 pt-5">
+                  <h3 className="font-bold text-slate-700 mb-4">Tax Details</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-bold text-slate-600 uppercase">GSTIN / Tax ID</label>
+                      <input value={customerForm.gstin} onChange={e => setCustomerForm(p => ({...p, gstin: e.target.value}))} className={`${inputClass} mt-1`} />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-600 uppercase">PAN</label>
+                      <input value={customerForm.pan} onChange={e => setCustomerForm(p => ({...p, pan: e.target.value}))} className={`${inputClass} mt-1`} />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-600 uppercase">Registration No.</label>
+                      <input value={customerForm.registration_number} onChange={e => setCustomerForm(p => ({...p, registration_number: e.target.value}))} className={`${inputClass} mt-1`} />
+                    </div>
+                  </div>
+                </div>
+                <div className="flex justify-end gap-3 pt-2">
+                  <button type="button" onClick={() => setShowCustomerModal(false)}
+                    className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 rounded-md border border-slate-200 cursor-pointer">Cancel</button>
+                  <button type="submit" disabled={savingCustomer}
+                    className="px-6 py-2 bg-blue-600 text-white text-sm font-bold rounded-md hover:bg-blue-700 flex items-center gap-2 cursor-pointer disabled:opacity-60">
+                    {savingCustomer && <Loader2 className="w-4 h-4 animate-spin" />} Save
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Tax Modal ── */}
+      {showTaxModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm">
+            <div className="flex items-center justify-between p-6 border-b border-slate-100">
+              <h2 className="text-lg font-bold text-slate-800">Add Custom Tax</h2>
+              <button type="button" onClick={() => setShowTaxModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleCreateTax} className="p-6 space-y-4">
               <div>
-                <label className="text-sm font-medium text-slate-700">Name *</label>
-                <input value={itemForm.name}
-                  onChange={e => setItemForm(p => ({ ...p, name: e.target.value }))}
-                  className={`${inputClass} mt-1`} placeholder="Web Design" />
+                <label className="text-xs font-bold text-slate-600 uppercase">Tax Name</label>
+                <input value={taxForm.name} onChange={e => setTaxForm(p => ({...p, name: e.target.value}))}
+                  placeholder="e.g. GST" className={`${inputClass} mt-1`} required />
               </div>
               <div>
-                <label className="text-sm font-medium text-slate-700">Description</label>
-                <input value={itemForm.description}
-                  onChange={e => setItemForm(p => ({ ...p, description: e.target.value }))}
-                  className={`${inputClass} mt-1`} placeholder="Optional description" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-sm font-medium text-slate-700">Unit Price *</label>
-                  <input type="number" value={itemForm.unit_price} min="0" step="0.01"
-                    onChange={e => setItemForm(p => ({ ...p, unit_price: e.target.value }))}
-                    className={`${inputClass} mt-1`} placeholder="0.00" />
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-slate-700">Tax %</label>
-                  <input type="number" value={itemForm.tax_percent} min="0" max="99"
-                    onChange={e => setItemForm(p => ({ ...p, tax_percent: e.target.value }))}
-                    className={`${inputClass} mt-1`} placeholder="0" />
-                </div>
+                <label className="text-xs font-bold text-slate-600 uppercase">Percentage (%)</label>
+                <input type="number" min="0" max="99" step="0.01" value={taxForm.percent}
+                  onChange={e => setTaxForm(p => ({...p, percent: e.target.value}))}
+                  placeholder="e.g. 18" className={`${inputClass} mt-1`} required />
               </div>
               <div className="flex justify-end gap-3 pt-2">
-                <button type="button" onClick={() => setShowItemModal(false)}
-                  className="px-4 py-2 text-sm rounded-md border border-slate-200 hover:bg-slate-50 cursor-pointer">
-                  Cancel
-                </button>
-                <button type="submit" disabled={savingItem}
-                  className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 cursor-pointer">
-                  {savingItem && <Loader2 className="w-4 h-4 animate-spin" />}
-                  Create
+                <button type="button" onClick={() => setShowTaxModal(false)}
+                  className="px-4 py-2 text-sm text-slate-600 border border-slate-200 rounded-md hover:bg-slate-50 cursor-pointer">Cancel</button>
+                <button type="submit" disabled={savingTax}
+                  className="px-6 py-2 bg-blue-600 text-white text-sm font-bold rounded-md hover:bg-blue-700 flex items-center gap-2 cursor-pointer disabled:opacity-60">
+                  {savingTax && <Loader2 className="w-4 h-4 animate-spin" />} Save
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
-
     </div>
   );
 }
