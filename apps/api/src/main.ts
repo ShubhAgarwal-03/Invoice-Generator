@@ -22,11 +22,14 @@ app.use(cors({
 }));
 app.use(express.json());
 
+import taxRoutes from './routes/taxes';
+
 // Routes
 app.use('/api/customers', customerRoutes);
 app.use('/api/items', itemRoutes);
 app.use('/api/invoices', invoiceRoutes);
 app.use('/api/company', companyRoutes);
+app.use('/api/taxes', taxRoutes);
 
 app.get('/api/health', (_, res) => res.json({ status: 'ok' }));
 

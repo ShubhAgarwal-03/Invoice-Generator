@@ -10,29 +10,47 @@ const router = Router();
 
 
 // Helper to process line items and totals
-const calculateTotals = (items: any[]) => {
+const calculateTotals = (items: any[], discount_percent: number = 0) => {
   let subtotal = 0, tax_total = 0;
   const processedItems = items.map((item) => {
     const qty = Number(item.quantity) || 0;
     const price = Number(item.unit_price) || 0;
-    const taxRate = Number(item.tax_percent) || 0;
 
     const base = qty * price;
-    const tax = base * (taxRate / 100);
+    let itemTaxTotal = 0;
+    
+    // Process multiple taxes
+    const processedTaxes = (item.taxes || []).map((tax: any) => {
+      const taxRate = Number(tax.percent) || 0;
+      const taxAmount = base * (taxRate / 100);
+      itemTaxTotal += taxAmount;
+      return {
+        tax_id: tax.tax_id,
+        name: tax.name,
+        percent: taxRate,
+        tax_amount: parseFloat(taxAmount.toFixed(2))
+      };
+    });
+
     subtotal += base;
-    tax_total += tax;
+    tax_total += itemTaxTotal;
 
     return { 
       ...item, 
-      line_total: parseFloat((base + tax).toFixed(2)) 
+      taxes: processedTaxes,
+      line_total: parseFloat((base + itemTaxTotal).toFixed(2)) 
     };
   });
+
+  const discount_amount = subtotal * (discount_percent / 100);
+  const total = subtotal - discount_amount + tax_total;
 
   return {
     processedItems,
     subtotal: parseFloat(subtotal.toFixed(2)),
+    discount_amount: parseFloat(discount_amount.toFixed(2)),
     tax_total: parseFloat(tax_total.toFixed(2)),
-    total: parseFloat((subtotal + tax_total).toFixed(2)),
+    total: parseFloat(total.toFixed(2)),
   };
 };
 
@@ -52,7 +70,7 @@ router.get('/', async (req: Request, res: Response) => {
 
     if (search) {
       const regex = new RegExp(search as string, 'i');
-      filter.$or = [{ invoice_number: regex }, { 'customer_snapshot.name': regex }];
+      filter.$or = [{ invoice_number: regex }, { 'customer_snapshot.customer_name': regex }, { 'customer_snapshot.company_name': regex }];
     }
 
     const pageNum = Math.max(1, parseInt(page as string));
@@ -87,8 +105,10 @@ router.get('/:id', async (req: Request, res: Response) => {
 // CREATE
 router.post('/', async (req: Request, res: Response) => {
   try {
-    
-    const { customer_id, issue_date, due_date, items, notes, shipping_address, is_interstate } = req.body;
+    const { 
+      customer_id, po_so_number, issue_date, due_date, items, notes, shipping_address, is_interstate,
+      discount_percent, tax_exempt, payment_terms, terms_and_conditions, auto_payment_reminder, created_by
+    } = req.body;
 
     if (!customer_id || !items?.length) {
       return res.status(400).json({ error: 'Customer ID and items are required' });
@@ -101,28 +121,39 @@ router.post('/', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Due date cannot be in the past' });
     }
 
-
     // 2. Snapshot Customer
     const customer = await Customer.findOne({ _id: customer_id, is_deleted: false });
     if (!customer) return res.status(404).json({ error: 'Customer not found' });
 
     const customer_snapshot = {
       _id: customer._id.toString(),
-      name: customer.name,
+      customer_code: customer.customer_code,
+      customer_type: customer.customer_type,
+      customer_name: customer.customer_name,
+      company_name: customer.company_name,
       email: customer.email,
       phone: customer.phone,
       address: customer.address,
+      billing_address_1: customer.billing_address_1,
+      billing_address_2: customer.billing_address_2,
+      city: customer.city,
+      state: customer.state,
+      postal_code: customer.postal_code,
       gstin: customer.gstin,
+      pan: customer.pan,
+      registration_number: customer.registration_number,
       country: customer.country,
       currency: customer.currency,
     };
 
     // 3. Process Totals
-    const { processedItems, subtotal, tax_total, total } = calculateTotals(items);
+    const dPercent = Number(discount_percent) || 0;
+    const { processedItems, subtotal, discount_amount, tax_total, total } = calculateTotals(items, dPercent);
     const invoice_number = await generateInvoiceNumber();
 
     const invoice = await Invoice.create({
       invoice_number,
+      po_so_number,
       customer_id,
       customer_snapshot,
       issue_date: issue_date ?? new Date(),
@@ -131,9 +162,16 @@ router.post('/', async (req: Request, res: Response) => {
       items: processedItems,
       is_interstate: is_interstate ?? true,
       subtotal,
+      discount_percent: dPercent,
+      discount_amount,
       tax_total,
       total,
       notes,
+      tax_exempt,
+      payment_terms,
+      terms_and_conditions,
+      auto_payment_reminder,
+      created_by
     });
 
     res.status(201).json(invoice);
@@ -145,7 +183,10 @@ router.post('/', async (req: Request, res: Response) => {
 // UPDATE
 router.put('/:id', async (req: Request, res: Response) => {
   try {
-    const { customer_id, items, due_date, issue_date, notes, status, shipping_address, is_interstate } = req.body;
+    const { 
+      customer_id, po_so_number, items, due_date, issue_date, notes, status, shipping_address, is_interstate,
+      discount_percent, tax_exempt, payment_terms, terms_and_conditions, auto_payment_reminder
+    } = req.body;
 
     // 1. Validation
     if (due_date && new Date(due_date) < new Date(new Date().setHours(0,0,0,0))) {
@@ -155,19 +196,31 @@ router.put('/:id', async (req: Request, res: Response) => {
     const customer = await Customer.findOne({ _id: customer_id, is_deleted: false });
     if (!customer) return res.status(404).json({ error: 'Customer not found' });
 
-    const { processedItems, subtotal, tax_total, total } = calculateTotals(items);
+    const dPercent = Number(discount_percent) || 0;
+    const { processedItems, subtotal, discount_amount, tax_total, total } = calculateTotals(items, dPercent);
 
     const updated = await Invoice.findOneAndUpdate(
       { _id: req.params.id, is_deleted: false },
       {
         customer_id,
+        po_so_number,
         customer_snapshot: {
           _id: customer._id.toString(),
-          name: customer.name,
+          customer_code: customer.customer_code,
+          customer_type: customer.customer_type,
+          customer_name: customer.customer_name,
+          company_name: customer.company_name,
           email: customer.email,
           phone: customer.phone,  
           address: customer.address,
+          billing_address_1: customer.billing_address_1,
+          billing_address_2: customer.billing_address_2,
+          city: customer.city,
+          state: customer.state,
+          postal_code: customer.postal_code,
           gstin: customer.gstin,
+          pan: customer.pan,
+          registration_number: customer.registration_number,
           country: customer.country,
           currency: customer.currency,
         },
@@ -175,12 +228,18 @@ router.put('/:id', async (req: Request, res: Response) => {
         due_date: due_date ?? null,
         items: processedItems,
         subtotal,
+        discount_percent: dPercent,
+        discount_amount,
         tax_total,
         total,
         notes,
         status,
         shipping_address: shipping_address ?? null,
         is_interstate: is_interstate ?? true,
+        tax_exempt,
+        payment_terms,
+        terms_and_conditions,
+        auto_payment_reminder
       },
       { new: true }
     );

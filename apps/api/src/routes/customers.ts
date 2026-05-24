@@ -28,8 +28,13 @@ router.get('/:id', async (req: Request, res: Response) => {
 // POST
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const { name, email, phone, address, country, gstin } = req.body;
-    if (!name || !country) return res.status(400).json({ error: 'name and country are required' });
+    const { 
+      customer_code, customer_type, customer_name, company_name, 
+      email, phone, address, billing_address_1, billing_address_2, city, state, postal_code,
+      country, gstin, pan, registration_number 
+    } = req.body;
+    
+    if (!customer_name || !country) return res.status(400).json({ error: 'customer_name and country are required' });
     
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (email && !emailRegex.test(email)) {
@@ -37,7 +42,11 @@ router.post('/', async (req: Request, res: Response) => {
     }
 
     const currency = getCurrencyForCountry(country);
-    const customer = await Customer.create({ name, email, phone, address, country, currency, gstin });
+    const customer = await Customer.create({ 
+      customer_code, customer_type, customer_name, company_name, 
+      email, phone, address, billing_address_1, billing_address_2, city, state, postal_code,
+      country, currency, gstin, pan, registration_number
+    });
     res.status(201).json(customer);
   } catch {
     res.status(500).json({ error: 'Failed to create customer' });
@@ -47,14 +56,22 @@ router.post('/', async (req: Request, res: Response) => {
 // PUT
 router.put('/:id', async (req: Request, res: Response) => {
   try {
-    const { name, email, phone, address, country, gstin } = req.body;
+    const { 
+      customer_code, customer_type, customer_name, company_name, 
+      email, phone, address, billing_address_1, billing_address_2, city, state, postal_code,
+      country, gstin, pan, registration_number 
+    } = req.body;
     
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (email && !emailRegex.test(email)) {
       return res.status(400).json({ error: 'Invalid email format' });
     }
 
-    const updates: Record<string, unknown> = { name, email, phone, address, country, gstin };
+    const updates: Record<string, unknown> = { 
+      customer_code, customer_type, customer_name, company_name, 
+      email, phone, address, billing_address_1, billing_address_2, city, state, postal_code,
+      country, gstin, pan, registration_number
+    };
     if (country) updates.currency = getCurrencyForCountry(country);
 
     const customer = await Customer.findOneAndUpdate(
