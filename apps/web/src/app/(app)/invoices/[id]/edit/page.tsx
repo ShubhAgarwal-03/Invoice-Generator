@@ -90,7 +90,7 @@ export default function EditInvoicePage() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer |
 null>(null);
 
-## `// Form fields` 
+ `// Form fields` 
 
   const [customerId, setCustomerId] = useState('');
   const [issueDate, setIssueDate] = useState('');
