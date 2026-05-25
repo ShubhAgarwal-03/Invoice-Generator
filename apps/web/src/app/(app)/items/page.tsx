@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { itemsService } from '@/services/items';
 import { Item } from '@/types';
-import { Loader2, Package, Plus, Pencil, Trash2 } from 'lucide-react';
+import { Loader2, Package, Plus, Pencil, Trash2, X } from 'lucide-react';
 
 const CURRENCIES = [
   'USD', 'INR', 'GBP', 'EUR', 'AUD', 'CAD', 'JPY',
@@ -23,10 +23,9 @@ const emptyForm = {
   tax_percent: '0',
   unit_of_measure: '',
   item_type: 'simple' as 'simple' | 'compound',
-  currency: 'USD',
-  hsn_sac: ''
+  currency: 'INR',
+  hsn_sac: '',
 };
-
 
 export default function ItemsPage() {
   const [items, setItems] = useState<Item[]>([]);
@@ -66,7 +65,7 @@ export default function ItemsPage() {
       tax_percent: String(item.tax_percent),
       unit_of_measure: item.unit_of_measure ?? '',
       item_type: item.item_type ?? 'simple',
-      currency: item.currency ?? 'USD',
+      currency: item.currency ?? 'INR',
       hsn_sac: item.hsn_sac ?? '',
     });
     setEditingId(item._id);
@@ -102,12 +101,11 @@ export default function ItemsPage() {
         hsn_sac: form.hsn_sac,
       };
       if (editingId) {
-        const updated = await itemsService.update(editingId, payload);
-        setItems(prev => prev.map(i => i._id === editingId ? updated : i));
+        await itemsService.update(editingId, payload);
       } else {
-        const created = await itemsService.create(payload);
-        setItems(prev => [created, ...prev]);
+        await itemsService.create(payload);
       }
+      await fetchItems(); // refetch — always shows exactly what DB saved
       toast.success('Item saved.');
       setShowModal(false);
     } catch {
@@ -133,11 +131,13 @@ export default function ItemsPage() {
     if (errors[e.target.name]) setErrors(prev => ({ ...prev, [e.target.name]: '' }));
   }
 
-  const inputClass = "w-full border border-slate-200 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500";
-  const errorClass = "text-red-500 text-xs mt-1";
+  const inputClass = 'w-full border border-slate-200 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500';
+  const errorClass = 'text-red-500 text-xs mt-1';
+  const labelClass = 'text-sm font-medium text-slate-700';
 
   return (
     <div>
+      {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
           <Package className="w-5 h-5 text-slate-500" />
@@ -152,6 +152,7 @@ export default function ItemsPage() {
         </button>
       </div>
 
+      {/* Table */}
       {loading ? (
         <div className="flex justify-center py-20">
           <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
@@ -172,9 +173,7 @@ export default function ItemsPage() {
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
                 {['Name', 'Description', 'HSN/SAC', 'Type', 'UOM', 'Currency', 'Unit Price', 'Tax %', 'Actions'].map(h => (
-                  <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                    {h}
-                  </th>
+                  <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -183,14 +182,9 @@ export default function ItemsPage() {
                 <tr key={item._id} className="hover:bg-slate-50 transition-colors">
                   <td className="px-4 py-3 font-medium text-slate-800">{item.name}</td>
                   <td className="px-4 py-3 text-slate-500">{item.description || '—'}</td>
-                  <td className="px-4 py-3 text-slate-500 font-mono">
-                      {item.hsn_sac || '—'}
-                  </td>
+                  <td className="px-4 py-3 text-slate-500 font-mono">{item.hsn_sac || '—'}</td>
                   <td className="px-4 py-3">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
-                      ${item.item_type === 'compound'
-                        ? 'bg-purple-100 text-purple-700'
-                        : 'bg-slate-100 text-slate-600'}`}>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${item.item_type === 'compound' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600'}`}>
                       {item.item_type ?? 'simple'}
                     </span>
                   </td>
@@ -217,111 +211,76 @@ export default function ItemsPage() {
         </div>
       )}
 
-      {/* Create/Edit Modal */}
+      {/* Create / Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-lg">
             <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
-              <h2 className="font-semibold text-slate-800">
-                {editingId ? 'Edit Item' : 'New Item'}
-              </h2>
-              <button onClick={() => setShowModal(false)}
-                className="text-slate-400 hover:text-slate-600 text-xl cursor-pointer">✕</button>
+              <h2 className="font-semibold text-slate-800">{editingId ? 'Edit Item' : 'New Item'}</h2>
+              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
-
-              {/* Name */}
               <div>
-                <label className="text-sm font-medium text-slate-700">
-                  Name <span className="text-red-500">*</span>
-                </label>
+                <label className={labelClass}>Name <span className="text-red-500">*</span></label>
                 <input name="name" value={form.name} onChange={handleChange}
                   placeholder="Web Design Services" className={`${inputClass} mt-1`} />
                 {errors.name && <p className={errorClass}>{errors.name}</p>}
               </div>
-
               <div>
-                <label className="text-sm font-medium text-slate-700">
-                  HSN/SAC Code
-                </label>
-                <input
-                  name="hsn_sac"
-                  value={form.hsn_sac}
-                  onChange={handleChange}
-                  placeholder="998314"
-                  className={`${inputClass} mt-1`}
-                />
+                <label className={labelClass}>HSN/SAC Code</label>
+                <input name="hsn_sac" value={form.hsn_sac} onChange={handleChange}
+                  placeholder="998314" className={`${inputClass} mt-1`} />
               </div>
-
-              {/* Description */}
               <div>
-                <label className="text-sm font-medium text-slate-700">Description</label>
+                <label className={labelClass}>Description</label>
                 <input name="description" value={form.description} onChange={handleChange}
                   placeholder="Brief description of the item" className={`${inputClass} mt-1`} />
               </div>
-
-              {/* Item Type toggle */}
               <div>
-                <label className="text-sm font-medium text-slate-700">Item Type</label>
+                <label className={labelClass}>Item Type</label>
                 <div className="flex gap-2 mt-1">
                   {(['simple', 'compound'] as const).map(type => (
-                    <button
-                      key={type}
-                      type="button"
+                    <button key={type} type="button"
                       onClick={() => setForm(p => ({ ...p, item_type: type }))}
-                      className={`flex-1 py-2 rounded-md text-sm font-medium border transition-colors capitalize
-                        ${form.item_type === type
-                          ? 'bg-blue-600 text-white border-blue-600 cursor-pointer'
-                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 cursor-pointer'}`}>
+                      className={`flex-1 py-2 rounded-md text-sm font-medium border transition-colors capitalize cursor-pointer ${form.item_type === type ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>
                       {type}
                     </button>
                   ))}
                 </div>
               </div>
-
-              {/* UOM + Currency */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-sm font-medium text-slate-700">Unit of Measure</label>
+                  <label className={labelClass}>Unit of Measure</label>
                   <select name="unit_of_measure" value={form.unit_of_measure}
                     onChange={handleChange} className={`${inputClass} mt-1`}>
                     <option value="">Select UOM...</option>
-                    {UOM_OPTIONS.map(u => (
-                      <option key={u} value={u}>{u}</option>
-                    ))}
+                    {UOM_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-slate-700">Currency</label>
+                  <label className={labelClass}>Currency</label>
                   <select name="currency" value={form.currency}
                     onChange={handleChange} className={`${inputClass} mt-1`}>
-                    {CURRENCIES.map(c => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
+                    {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
               </div>
-
-              {/* Unit Price + Tax */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-sm font-medium text-slate-700">
-                    Unit Price <span className="text-red-500">*</span>
-                  </label>
+                  <label className={labelClass}>Unit Price <span className="text-red-500">*</span></label>
                   <input name="unit_price" value={form.unit_price} onChange={handleChange}
-                    type="number" min="0" step="0.01" placeholder="0.00"
-                    className={`${inputClass} mt-1`} />
+                    type="number" min="0" step="0.01" placeholder="0.00" className={`${inputClass} mt-1`} />
                   {errors.unit_price && <p className={errorClass}>{errors.unit_price}</p>}
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-slate-700">Tax %</label>
+                  <label className={labelClass}>Tax %</label>
                   <input name="tax_percent" value={form.tax_percent} onChange={handleChange}
-                    type="number" min="0" max="99" step="0.01" placeholder="0"
-                    className={`${inputClass} mt-1`} />
+                    type="number" min="0" max="99" step="0.01" placeholder="0" className={`${inputClass} mt-1`} />
                   {errors.tax_percent && <p className={errorClass}>{errors.tax_percent}</p>}
                 </div>
               </div>
-
               <div className="flex justify-end gap-3 pt-2">
                 <button type="button" onClick={() => setShowModal(false)}
                   className="px-4 py-2 text-sm rounded-md border border-slate-200 hover:bg-slate-50 cursor-pointer">
