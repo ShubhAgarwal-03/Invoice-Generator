@@ -101,11 +101,12 @@ export default function ItemsPage() {
         hsn_sac: form.hsn_sac,
       };
       if (editingId) {
-        await itemsService.update(editingId, payload);
+        const updated = await itemsService.update(editingId, payload);
+        setItems(prev => prev.map(i => i._id === editingId ? { ...payload, ...updated } : i));
       } else {
-        await itemsService.create(payload);
+        const created = await itemsService.create(payload);
+        setItems(prev => [{ ...payload, ...created }, ...prev]);
       }
-      await fetchItems(); // refetch — always shows exactly what DB saved
       toast.success('Item saved.');
       setShowModal(false);
     } catch {
