@@ -4,6 +4,8 @@ import Customer from '../models/Customer';
 import CompanyConfig from '../models/CompanyConfig';
 import { generateInvoiceNumber } from '../utils/invoiceNumber';
 import { generateInvoicePdf } from '../services/pdfService';
+import { syncInvoicePaymentFields } from './payments';
+import Payment from '../models/Payment';
 
 const router = Router();
 
@@ -300,14 +302,32 @@ router.patch('/:id/status', async (req: Request, res: Response) => {
     if (!status || !validStatuses.includes(status)) {
       return res.status(400).json({ error: 'Invalid status. Must be draft, sent, or paid.' });
     }
+ 
+    const invoice = await Invoice.findOne({ _id: req.params.id, is_deleted: false });
+    if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
+ 
+    // Option A: "Mark as Paid" auto-creates a full payment record if none covers the balance
+    if (status === 'paid' && invoice.payment_status !== 'paid') {
+      const remaining = parseFloat((invoice.total - (invoice.amount_paid ?? 0)).toFixed(2));
+      if (remaining > 0) {
+        await Payment.create({
+          invoice_id: invoice._id,
+          amount: remaining,
+          method: 'other',
+          paid_at: new Date(),
+          notes: 'Recorded via Mark as Paid',
+        });
+        await syncInvoicePaymentFields(req.params.id);
+      }
+    }
+ 
     const updated = await Invoice.findOneAndUpdate(
       { _id: req.params.id, is_deleted: false },
       { status },
       { new: true }
     );
-    if (!updated) return res.status(404).json({ error: 'Invoice not found' });
     res.json(updated);
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: 'Failed to update status' });
   }
 });

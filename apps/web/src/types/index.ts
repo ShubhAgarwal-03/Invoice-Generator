@@ -1,4 +1,17 @@
 export type InvoiceStatus = 'draft' | 'sent' | 'paid';
+export type PaymentMethod = 'cash' | 'bank_transfer' | 'upi' | 'cheque' | 'card' | 'other'; 
+export type PaymentStatus = 'unpaid' | 'partial' | 'paid';
+ 
+export interface Payment {
+  _id: string;
+  invoice_id: string;
+  amount: number;
+  method: PaymentMethod;
+  paid_at: string;
+  notes?: string;
+  createdAt: string;
+}
+
 
 export interface Tax {
   _id: string;
@@ -94,6 +107,9 @@ export interface Invoice {
   discount_amount?: number;
   tax_total: number;
   total: number;
+  amount_paid?: number;
+  balance_due?: number;
+  payment_status?: PaymentStatus;
   shipping_address?: string | null;
   is_interstate?: boolean;
   notes?: string;

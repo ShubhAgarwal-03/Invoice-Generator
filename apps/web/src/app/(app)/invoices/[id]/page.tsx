@@ -5,14 +5,21 @@ import { useRouter, useParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { invoicesService } from '@/services/invoices';
 import { companyService } from '@/services/company';
-import { Invoice, CompanyConfig, InvoiceStatus } from '@/types';
+import { Invoice, CompanyConfig, InvoiceStatus, PaymentStatus } from '@/types';
 import { formatDate } from '@/utils/date';
 import { formatCurrency } from '@/utils/currency';
 import { Loader2, Pencil, Download, Copy, Trash2, ArrowLeft } from 'lucide-react';
+import PaymentPanel from '@/components/invoices/PaymentPanel';
 
 const STATUS_BADGE: Record<InvoiceStatus, string> = {
   draft: 'bg-slate-100 text-slate-600',
   sent: 'bg-blue-100 text-blue-700',
+  paid: 'bg-green-100 text-green-700',
+};
+
+const PAYMENT_STATUS_BADGE: Record<PaymentStatus, string> = {
+  unpaid: 'bg-red-100 text-red-700',
+  partial: 'bg-amber-100 text-amber-700',
   paid: 'bg-green-100 text-green-700',
 };
 
@@ -38,7 +45,6 @@ function numberToWords(amount: number): string {
   return result.trim() + ' Only';
 }
 
-// Build tax breakdown from the structured taxes array on each line item
 function getTaxBreakdown(items: Invoice['items']) {
   const breakdown: Record<string, { name: string; amount: number }> = {};
   items.forEach(item => {
@@ -52,7 +58,6 @@ function getTaxBreakdown(items: Invoice['items']) {
   return Object.values(breakdown);
 }
 
-// Helper: customer display name from snapshot
 function snapshotDisplayName(snap: Invoice['customer_snapshot']): string {
   return snap.customer_name ?? (snap as any).name ?? '';
 }
@@ -61,7 +66,6 @@ export default function InvoiceDetailPage() {
   const router = useRouter();
   const params = useParams();
   const id = params.id as string;
-
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [company, setCompany] = useState<CompanyConfig | null>(null);
   const [loading, setLoading] = useState(true);
@@ -168,6 +172,7 @@ export default function InvoiceDetailPage() {
   const fmt = (n: number) => formatCurrency(n, invoice.customer_snapshot.currency, invoice.customer_snapshot.country);
   const taxBreakdown = getTaxBreakdown(invoice.items);
   const displayName = snapshotDisplayName(invoice.customer_snapshot);
+  const paymentStatus = invoice.payment_status ?? 'unpaid';
 
   return (
     <div className="min-h-screen bg-slate-100 py-8 px-4">
@@ -180,6 +185,7 @@ export default function InvoiceDetailPage() {
         >
           <ArrowLeft className="w-4 h-4" /> Back to Invoices
         </button>
+
         <div className="flex items-center gap-2 flex-wrap">
           {invoice.status !== 'sent' && (
             <button onClick={() => handleStatusChange('sent')} disabled={updatingStatus}
@@ -194,92 +200,78 @@ export default function InvoiceDetailPage() {
             </button>
           )}
           <button onClick={handleDuplicate} disabled={duplicating}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-200 rounded-md hover:bg-slate-50 text-slate-600 disabled:opacity-50 cursor-pointer">
+            className="flex items-center gap-2 px-3 py-1.5 text-sm border border-slate-200 text-slate-600 rounded-md hover:bg-slate-50 disabled:opacity-50 cursor-pointer">
             {duplicating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Copy className="w-4 h-4" />}
             Duplicate
           </button>
-          <button onClick={() => router.push(`/invoices/${id}/edit`)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-200 rounded-md hover:bg-slate-50 text-slate-600 cursor-pointer">
+          <button
+            onClick={() => router.push(`/invoices/${id}/edit`)}
+            className="flex items-center gap-2 px-3 py-1.5 text-sm border border-slate-200 text-slate-600 rounded-md hover:bg-slate-50 cursor-pointer">
             <Pencil className="w-4 h-4" /> Edit
           </button>
           <button onClick={handleDownloadPdf} disabled={downloadingPdf}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-200 rounded-md hover:bg-slate-50 text-slate-600 disabled:opacity-50 cursor-pointer">
+            className="flex items-center gap-2 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 cursor-pointer">
             {downloadingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
             Download PDF
           </button>
           <button onClick={() => setDeleteOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-red-200 text-red-600 rounded-md hover:bg-red-50 cursor-pointer">
+            className="flex items-center gap-2 px-3 py-1.5 text-sm border border-red-200 text-red-500 rounded-md hover:bg-red-50 cursor-pointer">
             <Trash2 className="w-4 h-4" /> Delete
           </button>
         </div>
       </div>
 
       {/* Invoice Card */}
-      <div className="max-w-4xl mx-auto bg-white rounded-2xl shadow-sm overflow-hidden">
-
-        {/* Top colour bar */}
+      <div className="max-w-4xl mx-auto bg-white rounded-2xl shadow-sm overflow-hidden border border-slate-200">
+        {/* Blue header bar */}
         <div className="h-2 bg-blue-600" />
 
-        <div className="p-10 space-y-8">
+        <div className="p-8 space-y-8">
 
-          {/* Header: Company + Invoice Meta */}
-          <div className="flex justify-between items-start gap-8">
-            {/* Company */}
-            <div className="space-y-1">
-              {company?.logo_url ? (
-                <img src={company.logo_url} alt="Logo" className="h-12 mb-3 object-contain" />
-              ) : (
-                <div className="w-12 h-12 rounded-lg bg-blue-600 flex items-center justify-center mb-3">
-                  <span className="text-white font-bold text-lg">{(company?.name ?? 'C')[0]}</span>
-                </div>
+          {/* Header: company + invoice meta */}
+          <div className="flex justify-between items-start flex-wrap gap-6">
+            <div>
+              {company?.logo_url && (
+                <img src={company.logo_url} alt="logo" className="h-12 mb-3 object-contain" />
               )}
-              <h2 className="text-xl font-bold text-slate-800">{company?.name || 'Your Company'}</h2>
-              {company?.address && <p className="text-sm text-slate-500">{company.address}</p>}
+              <h1 className="text-xl font-bold text-slate-800">{company?.name}</h1>
+              {company?.address && <p className="text-sm text-slate-500 mt-1 whitespace-pre-line">{company.address}</p>}
               {company?.email && <p className="text-sm text-slate-500">{company.email}</p>}
               {company?.phone && <p className="text-sm text-slate-500">{company.phone}</p>}
               {company?.gstin && <p className="text-xs text-slate-400 mt-1">GSTIN: {company.gstin}</p>}
               {company?.pan && <p className="text-xs text-slate-400">PAN: {company.pan}</p>}
             </div>
 
-            {/* Invoice Meta */}
-            <div className="text-right space-y-2 min-w-[200px]">
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Invoice</p>
-              <p className="text-2xl font-bold text-slate-800">{invoice.invoice_number}</p>
-              <span className={`inline-block text-xs font-semibold px-3 py-1 rounded-full capitalize ${STATUS_BADGE[invoice.status]}`}>
-                {invoice.status}
-              </span>
-              <div className="space-y-1 pt-2 text-sm text-slate-600">
-                <div className="flex justify-between gap-6">
-                  <span className="text-slate-400">Issue Date</span>
-                  <span>{formatDate(invoice.issue_date)}</span>
-                </div>
-                {invoice.due_date && (
-                  <div className="flex justify-between gap-6">
-                    <span className="text-slate-400">Due Date</span>
-                    <span>{formatDate(invoice.due_date)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between gap-6">
-                  <span className="text-slate-400">Currency</span>
-                  <span>{invoice.customer_snapshot.currency}</span>
-                </div>
-                {invoice.po_so_number && (
-                  <div className="flex justify-between gap-6">
-                    <span className="text-slate-400">PO/SO No.</span>
-                    <span>{invoice.po_so_number}</span>
-                  </div>
-                )}
+            <div className="text-right space-y-1">
+              <div className="flex items-center justify-end gap-2 mb-2 flex-wrap">
+                <span className={`text-xs px-2.5 py-1 rounded-full font-medium capitalize ${STATUS_BADGE[invoice.status]}`}>
+                  {invoice.status}
+                </span>
+                <span className={`text-xs px-2.5 py-1 rounded-full font-medium capitalize ${PAYMENT_STATUS_BADGE[paymentStatus]}`}>
+                  {paymentStatus === 'unpaid' ? 'Unpaid' : paymentStatus === 'partial' ? 'Partially Paid' : 'Fully Paid'}
+                </span>
               </div>
+              <p className="text-2xl font-bold text-slate-800 font-mono">{invoice.invoice_number}</p>
+              {invoice.po_so_number && (
+                <p className="text-xs text-slate-400">PO/SO: {invoice.po_so_number}</p>
+              )}
+              <p className="text-sm text-slate-500">Issue Date: {formatDate(invoice.issue_date)}</p>
+              {invoice.due_date && (
+                <p className="text-sm text-slate-500">Due Date: {formatDate(invoice.due_date)}</p>
+              )}
+              {invoice.payment_terms && (
+                <p className="text-xs text-slate-400">Terms: {invoice.payment_terms}</p>
+              )}
             </div>
           </div>
 
           {/* Bill To / Ship To */}
-          <div className="grid grid-cols-2 gap-8">
+          <div className="grid grid-cols-2 gap-8 pt-4 border-t border-slate-100">
             <div className="space-y-1">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Bill To</p>
               <p className="font-semibold text-slate-800">{displayName}</p>
-              {invoice.customer_snapshot.company_name && (
-                <p className="text-sm text-slate-600">{invoice.customer_snapshot.company_name}</p>
+              {invoice.customer_snapshot.company_name && invoice.customer_snapshot.company_name !== displayName && (
+                <p className="text-sm text-slate-500">{invoice.customer_snapshot.company_name}</p>
               )}
               {invoice.customer_snapshot.billing_address_1 && (
                 <p className="text-sm text-slate-500">{invoice.customer_snapshot.billing_address_1}</p>
@@ -328,7 +320,6 @@ export default function InvoiceDetailPage() {
               </thead>
               <tbody>
                 {invoice.items.map((item, i) => {
-                  const base = item.quantity * item.unit_price;
                   const taxDesc = item.taxes.map(t => `${t.name} ${t.percent}%`).join(', ') || '—';
                   return (
                     <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
@@ -373,6 +364,23 @@ export default function InvoiceDetailPage() {
                 <span>Total</span>
                 <span>{fmt(invoice.total)}</span>
               </div>
+              {/* Payment summary rows — only show once payments exist */}
+              {(invoice.amount_paid ?? 0) > 0 && (
+                <>
+                  <div className="flex justify-between text-sm text-green-600 pt-1">
+                    <span>Amount Paid</span>
+                    <span>-{fmt(invoice.amount_paid ?? 0)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm font-semibold pt-1 border-t border-slate-200">
+                    <span className={invoice.balance_due === 0 ? 'text-slate-400' : 'text-red-600'}>
+                      Balance Due
+                    </span>
+                    <span className={invoice.balance_due === 0 ? 'text-slate-400' : 'text-red-600'}>
+                      {fmt(invoice.balance_due ?? invoice.total)}
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
@@ -411,11 +419,15 @@ export default function InvoiceDetailPage() {
               <p className="text-xs text-slate-400 mt-0.5">{company?.name}</p>
             </div>
           </div>
-
         </div>
 
         {/* Bottom colour bar */}
         <div className="h-2 bg-blue-600" />
+      </div>
+
+      {/* Payment Panel — lives outside the invoice card, below it */}
+      <div className="max-w-4xl mx-auto mt-6">
+        <PaymentPanel invoice={invoice} onInvoiceUpdate={setInvoice} />
       </div>
 
       {/* Delete Dialog */}

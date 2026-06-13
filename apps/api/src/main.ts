@@ -6,6 +6,8 @@ import customerRoutes from './routes/customers';
 import itemRoutes from './routes/items';
 import invoiceRoutes from './routes/invoices';
 import companyRoutes from './routes/company';
+import paymentRoutes from './routes/payments';
+import dashboardRoutes from './routes/dashboard';
 
 dotenv.config();
 
@@ -30,6 +32,8 @@ app.use('/api/items', itemRoutes);
 app.use('/api/invoices', invoiceRoutes);
 app.use('/api/company', companyRoutes);
 app.use('/api/taxes', taxRoutes);
+app.use('/api/invoices', paymentRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 app.get('/api/health', (_, res) => res.json({ status: 'ok' }));
 

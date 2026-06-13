@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { cn } from '@/lib/utils';
 import { usePathname } from 'next/navigation';
 import {
   FileText,
@@ -9,9 +10,9 @@ import {
   Settings,
   LayoutDashboard,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 const navItems = [
+  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/invoices', label: 'Invoices', icon: FileText },
   { href: '/customers', label: 'Customers', icon: Users },
   { href: '/items', label: 'Items', icon: Package },
