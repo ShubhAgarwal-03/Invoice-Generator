@@ -133,6 +133,7 @@ export default function InvoicesPage() {
             <option value="">All Statuses</option>
             <option value="draft">Draft</option>
             <option value="sent">Sent</option>
+            <option value="partially_paid">Partially Paid</option>
             <option value="paid">Paid</option>
           </select>
           {/* From */}
