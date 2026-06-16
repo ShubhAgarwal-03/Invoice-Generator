@@ -8,6 +8,7 @@ import invoiceRoutes from './routes/invoices';
 import companyRoutes from './routes/company';
 import paymentRoutes from './routes/payments';
 import dashboardRoutes from './routes/dashboard';
+import ledgerRouter from './routes/ledger';
 
 dotenv.config();
 
@@ -27,6 +28,7 @@ app.use(express.json());
 import taxRoutes from './routes/taxes';
 
 // Routes
+app.use('/api/customers', ledgerRouter); 
 app.use('/api/customers', customerRoutes);
 app.use('/api/items', itemRoutes);
 app.use('/api/invoices', invoiceRoutes);

@@ -1,10 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { customersService } from '@/services/customers';
 import { Customer } from '@/types';
-import { Loader2, Users, Plus, Pencil, Trash2, X } from 'lucide-react';
+import { Loader2, Users, Plus, Pencil, Trash2, X, BookOpen } from 'lucide-react';
+
 
 const COUNTRIES = [
   { code: 'IN', name: 'India' }, { code: 'US', name: 'United States' },
@@ -65,6 +67,7 @@ export default function CustomersPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [currencyManuallySet, setCurrencyManuallySet] = useState(false);
+  const router = useRouter();
 
   useEffect(() => { fetchCustomers(); }, []);
 
@@ -240,20 +243,29 @@ export default function CustomersPage() {
                     <td className="px-4 py-3 text-slate-500">{c.gstin || '—'}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => openEdit(c)}
-                          className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-blue-600 transition-colors cursor-pointer"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => setDeleteId(c._id)}
-                          className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-red-600 transition-colors cursor-pointer"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
+                      <button
+                        onClick={() => openEdit(c)}
+                        className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-blue-600 transition-colors cursor-pointer"
+                        title="Edit"
+                      >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                <button
+              onClick={() => router.push(`/customers/${c._id}/ledger`)}
+              className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-indigo-600 transition-colors cursor-pointer"
+            title="View Ledger"
+          >
+          <BookOpen className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setDeleteId(c._id)}
+            className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-red-600 transition-colors cursor-pointer"
+            title="Delete"
+          >
+              <Trash2 className="w-4 h-4" />
+              </button>
+              </div>
+                </td>
                   </tr>
                 ))}
               </tbody>

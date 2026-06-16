@@ -146,3 +146,29 @@ export interface InvoiceListResponse {
   invoices: Invoice[];
   pagination: PaginationMeta;
 }
+
+
+export interface LedgerRow {
+  date: string;
+  description: string;
+  invoice_number?: string;
+  invoice_id?: string;
+  type: 'invoice' | 'payment';
+  debit: number;
+  credit: number;
+  balance: number;
+}
+
+export interface LedgerSummary {
+  total_invoiced: number;
+  total_paid: number;
+  closing_balance: number;
+  currency: string;
+  country: string;
+}
+
+export interface LedgerResponse {
+  customer: Customer;
+  rows: LedgerRow[];
+  summary: LedgerSummary;
+}
