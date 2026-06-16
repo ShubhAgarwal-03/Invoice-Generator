@@ -573,39 +573,62 @@ export default function NewInvoicePage() {
             </div>
 
             {/* Step: Choice */}
+            {/* Step: Choice */}
             {customerModalStep === 'choice' && (
-              <div className="p-8 grid grid-cols-2 gap-5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCustomerForm({ customer_code: '', customer_type: 'business', customer_name: '', company_name: '', email: '', phone: '', billing_address_1: '', billing_address_2: '', city: '', state: '', postal_code: '', country: 'IN', currency: 'INR', gstin: '', pan: '', registration_number: '' });
-                    setCustomerModalStep('new');
-                  }}
-                  className="group flex flex-col items-center justify-center gap-4 rounded-xl border-2 border-slate-200 hover:border-blue-500 hover:bg-blue-50/40 p-10 transition-all cursor-pointer text-center"
-                >
-                  <div className="w-14 h-14 rounded-full bg-blue-100 group-hover:bg-blue-200 flex items-center justify-center transition-colors">
-                    <UserPlus className="w-7 h-7 text-blue-600" />
-                  </div>
-                  <div>
-                    <p className="font-bold text-slate-800 text-base">New customer</p>
-                    <p className="text-sm text-slate-500 mt-1">Create and add a brand new customer</p>
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setExistingCustomerId(''); setCustomerModalStep('existing'); }}
-                  className="group flex flex-col items-center justify-center gap-4 rounded-xl border-2 border-slate-200 hover:border-blue-500 hover:bg-blue-50/40 p-10 transition-all cursor-pointer text-center"
-                >
-                  <div className="w-14 h-14 rounded-full bg-slate-100 group-hover:bg-blue-200 flex items-center justify-center transition-colors">
-                    <Users className="w-7 h-7 text-slate-500 group-hover:text-blue-600 transition-colors" />
-                  </div>
-                  <div>
-                    <p className="font-bold text-slate-800 text-base">Existing customer</p>
-                    <p className="text-sm text-slate-500 mt-1">Pick from your saved customers</p>
-                  </div>
-                </button>
-              </div>
-            )}
+              <div className="p-8 space-y-6">
+              {/* Existing customers dropdown */}
+              <div>
+              <label className="text-xs font-bold text-slate-600 uppercase">Select existing customer</label>
+              <select
+                value={existingCustomerId}
+                onChange={e => {
+                  setExistingCustomerId(e.target.value);
+                  if (e.target.value) {
+                    const c = customers.find(x => x._id === e.target.value);
+                    if (c) {
+                      setSelectedCustomer(c);
+                      setCustomerId(c._id);
+                      setShowCustomerModal(false);
+                    }
+                  }
+                }}
+                className={`${inputClass} mt-2`}
+              >
+              <option value="">— choose a customer —</option>
+              {customers.map(c => (
+                <option key={c._id} value={c._id}>
+                {c.customer_name}{c.company_name ? ` — ${c.company_name}` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+        {/* Divider */}
+        <div className="flex items-center gap-3">
+        <div className="flex-1 border-t border-slate-200" />
+        <span className="text-xs text-slate-400 font-medium">or</span>
+        <div className="flex-1 border-t border-slate-200" />
+        </div>
+
+        {/* New customer button */}
+        <button
+        type="button"
+        onClick={() => {
+          setCustomerForm({ customer_code: '', customer_type: 'business', customer_name: '', company_name: '', email: '', phone: '', billing_address_1: '', billing_address_2: '', city: '', state: '', postal_code: '', country: 'IN', currency: 'INR', gstin: '', pan: '', registration_number: '' });
+          setCustomerModalStep('new');
+          }}
+        className="w-full flex items-center justify-center gap-3 rounded-xl border-2 border-dashed border-slate-200 hover:border-blue-500 hover:bg-blue-50/40 py-5 transition-all cursor-pointer text-slate-600 hover:text-blue-600"
+        >
+        <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center">
+          <UserPlus className="w-5 h-5 text-blue-600" />
+        </div>
+        <div className="text-left">
+          <p className="font-bold text-sm">New customer</p>
+          <p className="text-xs text-slate-400">Create and add a brand new customer</p>
+        </div>
+      </button>
+    </div>
+    )}
 
             {/* Step: Choose existing */}
             {customerModalStep === 'existing' && (
