@@ -28,7 +28,6 @@ app.use(express.json());
 import taxRoutes from './routes/taxes';
 
 // Routes
-app.use('/api/customers', ledgerRouter); 
 app.use('/api/customers', customerRoutes);
 app.use('/api/items', itemRoutes);
 app.use('/api/invoices', invoiceRoutes);
