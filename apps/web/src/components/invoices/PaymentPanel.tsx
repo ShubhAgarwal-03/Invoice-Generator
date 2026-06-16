@@ -63,7 +63,7 @@ export default function PaymentPanel({ invoice, onInvoiceUpdate }: Props) {
       return;
     }
     const balance = invoice.balance_due ?? invoice.total;
-    if (amount > balance + 0.01) {
+    if (amount > balance + 0.1) {
       toast.error(`Amount exceeds balance due (${fmt(balance)})`);
       return;
     }
@@ -89,7 +89,9 @@ export default function PaymentPanel({ invoice, onInvoiceUpdate }: Props) {
 
   const paymentStatus = invoice.payment_status ?? 'unpaid';
   const amountPaid = invoice.amount_paid ?? 0;
-  const balanceDue = invoice.balance_due ?? invoice.total;
+  const balanceDue = (invoice.amount_paid ?? 0) === 0 && (invoice.balance_due ?? 0) === 0
+  ? invoice.total
+  : (invoice.balance_due ?? invoice.total);
 
   const inputClass =
     'border border-slate-200 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white w-full';

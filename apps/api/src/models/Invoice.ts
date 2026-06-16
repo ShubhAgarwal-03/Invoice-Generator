@@ -54,6 +54,9 @@ export interface IInvoice extends Document {
   discount_amount?: number;
   tax_total: number;
   total: number;
+  amount_paid?: number;
+  balance_due?: number;
+  payment_status?: 'unpaid' | 'partial' | 'paid';
   notes?: string;
   shipping_address?: string | null;
   is_interstate: boolean;
@@ -121,7 +124,7 @@ const InvoiceSchema = new Schema<IInvoice>(
     tax_total: { type: Number, required: true },
     total: { type: Number, required: true },
     amount_paid:    { type: Number, default: 0 },
-    balance_due:    { type: Number, default: 0 },
+    balance_due:    { type: Number },
     payment_status: { type: String, enum: ['unpaid', 'partial', 'paid'], default: 'unpaid' },
     notes: { type: String },
     shipping_address: { type: String, default: null },

@@ -415,10 +415,28 @@ export default function EditInvoicePage() {
                 </div>
                 <div>
                   <label className="text-xs font-bold text-slate-600 uppercase">Status</label>
-                  <select value={status} onChange={e => setStatus(e.target.value as InvoiceStatus)} className={`${inputClass} mt-1`}>
-                    {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
-                  </select>
-                </div>
+                  {(invoice.payment_status === 'partial' || invoice.payment_status === 'paid') ? (
+                    <div className={`${inputClass} mt-1 bg-slate-50 text-slate-500 cursor-not-allowed flex items-center`}>
+                      {status.charAt(0).toUpperCase() + status.slice(1)}
+                      <span className="ml-2 text-xs text-amber-600">
+                      (locked — payments recorded)
+                      </span>
+                    </div>
+                  ) : (
+                  <select
+                    value={status}
+                    onChange={e => setStatus(e.target.value as InvoiceStatus)}
+                    className={`${inputClass} mt-1`}
+                  >
+                {STATUS_OPTIONS.map(s => (
+              <option key={s} value={s}>
+              {s.charAt(0).toUpperCase() + s.slice(1)}
+            </option>
+          ))}
+        </select>
+      )}
+      </div>
+               
                 <div>
                   <label className="text-xs font-bold text-slate-600 uppercase">PO / SO Number</label>
                   <input value={poSoNumber} onChange={e => setPoSoNumber(e.target.value)} className={`${inputClass} mt-1`} />

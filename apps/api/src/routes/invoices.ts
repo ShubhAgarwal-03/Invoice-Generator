@@ -167,6 +167,10 @@ router.post('/', async (req: Request, res: Response) => {
       discount_percent: dPercent,
       discount_amount,
       tax_total,
+      amount_paid: 0,
+      balance_due: parseFloat(total.toFixed(2)),
+      payment_status: 'unpaid',
+      status: 'draft',
       total,
       notes,
       tax_exempt,
@@ -200,6 +204,14 @@ router.put('/:id', async (req: Request, res: Response) => {
 
     const dPercent = Number(discount_percent) || 0;
     const { processedItems, subtotal, discount_amount, tax_total, total } = calculateTotals(items, dPercent);
+    const existingPayments = await Payment.find({ invoice_id: req.params.id });
+    const amount_paid = parseFloat(
+      existingPayments.reduce((sum, p) => sum + p.amount, 0).toFixed(2)
+    );
+    const balance_due = parseFloat((total - amount_paid).toFixed(2));
+    const payment_status = amount_paid <= 0 ? 'unpaid' : balance_due <= 0 ? 'paid' : 'partial';
+
+
 
     const updated = await Invoice.findOneAndUpdate(
       { _id: req.params.id, is_deleted: false },
@@ -234,7 +246,10 @@ router.put('/:id', async (req: Request, res: Response) => {
         discount_amount,
         tax_total,
         total,
+        amount_paid,
+        balance_due,
         notes,
+        payment_status,
         status,
         shipping_address: shipping_address ?? null,
         is_interstate: is_interstate ?? true,
@@ -266,6 +281,9 @@ router.post('/:id/duplicate', async (req: Request, res: Response) => {
       customer_snapshot: source.customer_snapshot,
       status: 'draft',
       issue_date: new Date(),
+      amount_paid: 0,
+      balance_due: source.total,
+      payment_status: 'unpaid',
       due_date: undefined,
       items: source.items,
       subtotal: source.subtotal,
