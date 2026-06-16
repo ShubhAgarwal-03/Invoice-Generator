@@ -212,11 +212,17 @@ export default function InvoicesPage() {
                   <td className="px-4 py-3 text-slate-700 font-medium">
                     {formatCurrency(inv.total, inv.customer_snapshot.currency, inv.customer_snapshot.country)}
                   </td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${STATUS_BADGE[inv.status]}`}>
-                      {inv.status}
-                    </span>
-                  </td>
+                  <td className="px-6 py-4">
+                    {inv.payment_status === 'partial' ? (
+                    <span className="px-2 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
+                    Partially Paid
+                  </span>
+                ) : (
+              <span className={`px-2 py-1 rounded-full text-xs font-semibold ${STATUS_BADGE[inv.status]}`}>
+                {inv.status.charAt(0).toUpperCase() + inv.status.slice(1)}
+              </span>
+          )}
+          </td>
                   <td className="px-4 py-3 relative">
                     <button
                       onClick={e => { e.stopPropagation();

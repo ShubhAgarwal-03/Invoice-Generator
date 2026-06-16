@@ -244,12 +244,19 @@ export default function InvoiceDetailPage() {
 
             <div className="text-right space-y-1">
               <div className="flex items-center justify-end gap-2 mb-2 flex-wrap">
+                {paymentStatus === 'partial' ? (
+                  <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${PAYMENT_STATUS_BADGE['partial']}`}>
+                  Partially Paid
+                  </span>
+                ) : paymentStatus === 'paid' ? (
+                <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${PAYMENT_STATUS_BADGE['paid']}`}>
+                Fully Paid
+                </span>
+                ) : (
                 <span className={`text-xs px-2.5 py-1 rounded-full font-medium capitalize ${STATUS_BADGE[invoice.status]}`}>
                   {invoice.status}
                 </span>
-                <span className={`text-xs px-2.5 py-1 rounded-full font-medium capitalize ${PAYMENT_STATUS_BADGE[paymentStatus]}`}>
-                  {paymentStatus === 'unpaid' ? 'Unpaid' : paymentStatus === 'partial' ? 'Partially Paid' : 'Fully Paid'}
-                </span>
+                )}
               </div>
               <p className="text-2xl font-bold text-slate-800 font-mono">{invoice.invoice_number}</p>
               {invoice.po_so_number && (
