@@ -62,7 +62,7 @@ export default function PaymentPanel({ invoice, onInvoiceUpdate }: Props) {
       toast.error('Enter a valid amount');
       return;
     }
-    const balance = invoice.balance_due ?? invoice.total;
+    const balance = balanceDue;
     if (amount > balance + 0.1) {
       toast.error(`Amount exceeds balance due (${fmt(balance)})`);
       return;
