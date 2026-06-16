@@ -8,7 +8,6 @@ import invoiceRoutes from './routes/invoices';
 import companyRoutes from './routes/company';
 import paymentRoutes from './routes/payments';
 import dashboardRoutes from './routes/dashboard';
-import ledgerRouter from './routes/ledger';
 
 dotenv.config();
 

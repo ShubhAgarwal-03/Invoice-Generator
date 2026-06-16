@@ -6,6 +6,8 @@ import Payment from '../models/Payment';
 import CompanyConfig from '../models/CompanyConfig';
 import { generateLedgerPdf } from '../services/ledgerPdfServices';
 
+
+
 const router = Router();
 
 // GET all
@@ -18,7 +20,130 @@ router.get('/', async (_, res: Response) => {
   }
 });
 
-// GET one
+// ── LEDGER ── must be before GET /:id ─────────────────
+router.get('/:id/ledger', async (req: Request, res: Response) => {
+  try {
+    const customer = await Customer.findOne({ _id: req.params.id, is_deleted: false });
+    if (!customer) return res.status(404).json({ error: 'Customer not found' });
+
+    const invoices = await Invoice.find({ customer_id: req.params.id, is_deleted: false })
+      .sort({ issue_date: 1, createdAt: 1 });
+
+    const rows: any[] = [];
+
+    for (const inv of invoices) {
+      const payments = await Payment.find({ invoice_id: inv._id }).sort({ paid_at: 1 });
+      rows.push({
+        date: inv.issue_date,
+        description: `Invoice ${inv.invoice_number}`,
+        invoice_number: inv.invoice_number,
+        invoice_id: inv._id.toString(),
+        type: 'invoice',
+        debit: inv.total,
+        credit: 0,
+      });
+      for (const p of payments) {
+        rows.push({
+          date: p.paid_at,
+          description: `Payment${p.notes ? ` – ${p.notes}` : ''}`,
+          invoice_number: inv.invoice_number,
+          invoice_id: inv._id.toString(),
+          type: 'payment',
+          debit: 0,
+          credit: p.amount,
+        });
+      }
+    }
+
+    rows.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    let balance = 0;
+    const ledgerRows = rows.map(row => {
+      balance = parseFloat((balance + row.debit - row.credit).toFixed(2));
+      return { ...row, balance };
+    });
+
+    const allPayments = await Payment.find({ invoice_id: { $in: invoices.map(i => i._id) } });
+    const summary = {
+      total_invoiced: parseFloat(invoices.reduce((s, inv) => s + inv.total, 0).toFixed(2)),
+      total_paid: parseFloat(allPayments.reduce((s, p) => s + p.amount, 0).toFixed(2)),
+      closing_balance: balance,
+      currency: customer.currency,
+      country: customer.country,
+    };
+
+    res.json({ customer, rows: ledgerRows, summary });
+  } catch (err) {
+    console.error('Ledger error:', err);
+    res.status(500).json({ error: 'Failed to fetch ledger' });
+  }
+});
+
+router.get('/:id/statement/pdf', async (req: Request, res: Response) => {
+  try {
+    const customer = await Customer.findOne({ _id: req.params.id, is_deleted: false }).lean();
+    if (!customer) return res.status(404).json({ error: 'Customer not found' });
+
+    const company = await CompanyConfig.findOne().lean();
+    const invoices = await Invoice.find({ customer_id: req.params.id, is_deleted: false })
+      .sort({ issue_date: 1, createdAt: 1 }).lean();
+
+    const rows: any[] = [];
+    let balance = 0;
+
+    for (const inv of invoices) {
+      const payments = await Payment.find({ invoice_id: inv._id }).sort({ paid_at: 1 }).lean();
+      rows.push({
+        date: inv.issue_date,
+        description: `Invoice ${inv.invoice_number}`,
+        invoice_number: inv.invoice_number,
+        type: 'invoice',
+        debit: inv.total,
+        credit: 0,
+      });
+      for (const p of payments) {
+        rows.push({
+          date: (p as any).paid_at,
+          description: `Payment${(p as any).notes ? ` – ${(p as any).notes}` : ''}`,
+          invoice_number: inv.invoice_number,
+          type: 'payment',
+          debit: 0,
+          credit: (p as any).amount,
+        });
+      }
+    }
+
+    rows.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    const ledgerRows = rows.map(row => {
+      balance = parseFloat((balance + row.debit - row.credit).toFixed(2));
+      return { ...row, balance };
+    });
+
+    const allPayments = await Payment.find({
+      invoice_id: { $in: invoices.map((i: any) => i._id) }
+    }).lean();
+
+    const summary = {
+      total_invoiced: parseFloat(invoices.reduce((s, inv) => s + inv.total, 0).toFixed(2)),
+      total_paid: parseFloat(allPayments.reduce((s, p: any) => s + p.amount, 0).toFixed(2)),
+      closing_balance: balance,
+      currency: (customer as any).currency,
+      country: (customer as any).country,
+    };
+
+    const pdfBuffer = await generateLedgerPdf(customer, ledgerRows, summary, company);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition',
+      `attachment; filename="statement-${(customer as any).customer_name.replace(/\s+/g, '-')}.pdf"`);
+    res.send(pdfBuffer);
+  } catch (err) {
+    console.error('Statement PDF error:', err);
+    res.status(500).json({ error: 'Failed to generate statement PDF' });
+  }
+});
+
+// GET one — keep this AFTER the sub-routes above
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const customer = await Customer.findOne({ _id: req.params.id, is_deleted: false });
