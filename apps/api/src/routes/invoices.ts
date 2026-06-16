@@ -62,7 +62,13 @@ router.get('/', async (req: Request, res: Response) => {
     const { status, from, to, search, page = '1', limit = '20' } = req.query;
     const filter: Record<string, any> = { is_deleted: false };
 
-    if (status && status !== 'all') filter.status = status;
+    if (status && status !== 'all') {
+      if (status === 'partially_paid') {
+        filter.payment_status = 'partial';
+      } else {
+        filter.status = status;
+    }
+}
 
     if (from || to) {
       filter.issue_date = {};
